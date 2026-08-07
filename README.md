@@ -98,7 +98,7 @@ DATABASE_URL=postgres://verso:verso@localhost:5432/verso_anchor
 
 Guía completa: [RAILWAY.md](RAILWAY.md)
 
-Archivos incluidos: `railway.toml`, `Procfile`, `runtime.txt`, `nixpacks.toml`
+Archivos incluidos: `railpack.json`, `Procfile`, `runtime.txt`
 
 Resumen:
 1. Conectar repo GitHub en Railway

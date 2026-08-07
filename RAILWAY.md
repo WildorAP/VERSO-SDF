@@ -2,19 +2,18 @@
 
 ## Archivos de deploy incluidos
 
-| Archivo            | Función                            |
-| ------------------ | ---------------------------------- |
-| `requirements.txt` | Dependencias Python                |
-| `runtime.txt`      | Versión Python 3.12                |
-| `railway.toml`     | Build, migrate, start, healthcheck |
-| `Procfile`         | Comando web (fallback)             |
-| `nixpacks.toml`    | Config Nixpacks                    |
+| Archivo            | Función                                                         |
+| ------------------ | --------------------------------------------------------------- |
+| `requirements.txt` | Dependencias Python (raíz del repo)                             |
+| `runtime.txt`      | Versión Python 3.12                                             |
+| `railpack.json`    | Build, `collectstatic`, `migrate` + `gunicorn` (Django en `backend/`) |
+| `Procfile`         | Fallback si Railway no detecta Railpack                         |
 
 ## 1. Crear proyecto en Railway
 
 1. [railway.app](https://railway.app) → **New Project** → **Deploy from GitHub**
 2. Conectar repo `verso-stellar-anchor` (carpeta raíz `ANCHOR/`)
-3. **No** cambiar root directory — el build usa `backend/` vía comandos en `railway.toml`
+3. **Root directory** = raíz del repo (`ANCHOR/`). **No** apuntar solo a `backend/`; los comandos hacen `cd backend`.
 
 ## 2. Añadir PostgreSQL
 
@@ -77,7 +76,7 @@ Push a `main` → Railway build automático:
 pip install → collectstatic → migrate → gunicorn
 ```
 
-Healthcheck: `GET /.well-known/stellar.toml`
+Healthcheck (opcional, en Railway → Settings → Deploy): path `/.well-known/stellar.toml`
 
 ## 6. Verificar post-deploy
 
