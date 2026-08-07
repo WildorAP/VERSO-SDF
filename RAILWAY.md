@@ -2,13 +2,13 @@
 
 ## Archivos de deploy incluidos
 
-| Archivo | Función |
-|---------|---------|
-| `requirements.txt` | Dependencias Python |
-| `runtime.txt` | Versión Python 3.12 |
-| `railway.toml` | Build, migrate, start, healthcheck |
-| `Procfile` | Comando web (fallback) |
-| `nixpacks.toml` | Config Nixpacks |
+| Archivo            | Función                            |
+| ------------------ | ---------------------------------- |
+| `requirements.txt` | Dependencias Python                |
+| `runtime.txt`      | Versión Python 3.12                |
+| `railway.toml`     | Build, migrate, start, healthcheck |
+| `Procfile`         | Comando web (fallback)             |
+| `nixpacks.toml`    | Config Nixpacks                    |
 
 ## 1. Crear proyecto en Railway
 
@@ -100,13 +100,13 @@ Anchor Validator: https://anchor-tests.stellar.org
 
 ## Troubleshooting
 
-| Problema | Solución |
-|----------|----------|
+| Problema                               | Solución                                                                    |
+| -------------------------------------- | --------------------------------------------------------------------------- |
 | `No start command detected` (Railpack) | Usar `railpack.json` en la raíz o variable `RAILPACK_START_CMD` (ver abajo) |
-| 502 / crash al arrancar | Revisar logs; falta `SIGNING_SEED` o `SERVER_JWT_KEY` |
-| DisallowedHost | Añadir dominio a `ALLOWED_HOSTS` |
-| TOML con URLs HTTP | `LOCAL_MODE=0` y `HOST_URL=https://...` |
-| Migrate failed | Verificar `DATABASE_URL` referenciada desde Postgres |
+| 502 / crash al arrancar                | Revisar logs; falta `SIGNING_SEED` o `SERVER_JWT_KEY`                       |
+| DisallowedHost                         | Añadir dominio a `ALLOWED_HOSTS`                                            |
+| TOML con URLs HTTP                     | `LOCAL_MODE=0` y `HOST_URL=https://...`                                     |
+| Migrate failed                         | Verificar `DATABASE_URL` referenciada desde Postgres                        |
 
 ### Railpack — start command manual (si falla el auto-detect)
 
