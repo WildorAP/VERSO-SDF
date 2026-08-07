@@ -39,3 +39,7 @@ Thumbs.db
 
 # Docker
 *.pid
+
+# Local dev scripts (not part of deployed anchor)
+backend/scripts/test_sep10.py
+backend/scripts/test_invalid_auth.py
