@@ -11,7 +11,7 @@ from stellar_sdk import Keypair
 
 USDC_ISSUER_MAINNET = "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN"
 USDC_ISSUER_TESTNET = "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"
-TESTNET_PASSPHRASE = "Test SDF Network -VERSO"
+TESTNET_PASSPHRASE = "Test SDF Network ; September 2015"
 
 
 def _usdc_issuer() -> str:
@@ -45,9 +45,13 @@ def _usdc_currency(anchor_asset: str, description: str, redemption: str) -> dict
 
 def return_toml_contents(request, *args, **kwargs):
     anchor_accounts = []
-    signing_seed = os.environ.get("SIGNING_SEED")
+    signing_seed = os.environ.get("SIGNING_SEED", "").strip()
     if signing_seed:
-        anchor_accounts.append(Keypair.from_secret(signing_seed).public_key)
+        try:
+            anchor_accounts.append(Keypair.from_secret(signing_seed).public_key)
+        except Exception:
+            # Invalid SIGNING_SEED in env — avoid 500 on GET stellar.toml
+            pass
 
     return {
         "ACCOUNTS": anchor_accounts,
