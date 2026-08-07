@@ -1,0 +1,3 @@
+# Local secrets — root ANCHOR/.gitignore also applies
+.env
+.env.local

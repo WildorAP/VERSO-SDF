@@ -1,0 +1,14 @@
+# Served when LOCAL_MODE=1 (development / testnet).
+# Polaris may override this with sep1.py return_toml_contents when registered.
+
+VERSION = "1.0.0"
+NETWORK_PASSPHRASE = "Test SDF Network ; September 2015"
+ACCOUNTS = []
+
+[DOCUMENTATION]
+ORG_NAME = "VERSO — PSAV Perú"
+ORG_DBA = "VERSO"
+ORG_URL = "https://versotek.io"
+ORG_DESCRIPTION = "Exchange regulado PEN/USDC. Anchor Stellar testnet."
+ORG_OFFICIAL_EMAIL = "compliance@versotek.io"
+ORG_SUPPORT_EMAIL = "soporte@versotek.io"
