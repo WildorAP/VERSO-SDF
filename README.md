@@ -2,118 +2,150 @@
 
 Anchor Stellar de VERSO (PSAV Perú) implementado con **Django + Polaris**.
 
-Repositorio separado del core VERSO (`BASE_DE_CLIENTES`, `versotek.io`). Se conecta por API interna.
+Repositorio separado del core VERSO (`BASE_DE_CLIENTES`, [versotek.io](https://versotek.io)).
+
+**Producción (testnet):** https://anchor.versotek.io
 
 ## Roadmap
 
-| Tranche | SEPs | Estado |
-|---------|------|--------|
-| **T1** | SEP-1, SEP-10 | En progreso |
-| **T2** | SEP-24, SEP-38 | Pendiente |
-| **T3** | Mainnet + Anchor Directory | Pendiente |
+| Tranche | SEPs                       | Estado                                                                              |
+| ------- | -------------------------- | ----------------------------------------------------------------------------------- |
+| **T1**  | SEP-1, SEP-10              | Desplegado en testnet (`anchor.versotek.io`); validación Anchor Directory pendiente |
+| **T2**  | SEP-24, SEP-38             | Pendiente                                                                           |
+| **T3**  | Mainnet + Anchor Directory | Pendiente                                                                           |
 
-## Estructura
+## Estructura del repo
+
+El repositorio Git vive en la **raíz `ANCHOR/`**. Django está en `backend/`; Railway y el build usan la raíz (`railpack.json` hace `cd backend`).
 
 ```
 ANCHOR/
-├── venv/                       # Virtual environment (no commitear)
+├── .github/workflows/
+│   └── backend-tests.yml       # CI: tests SEP-1 / SEP-10 en push y PR
 ├── backend/
 │   ├── manage.py
-│   ├── config/                 # Settings Django
-│   ├── verso_integrations/     # Lógica de negocio VERSO
-│   │   ├── sep1.py             # Contenido stellar.toml
-│   │   ├── kyc_bridge.py       # Lookup KYC por Stellar pubkey
-│   │   ├── deposit.py          # On-ramp (T2)
-│   │   ├── withdraw.py         # Off-ramp (T2)
-│   │   └── rates.py            # Cotizaciones PEN/USDC (T2)
-│   └── .env                    # Variables Polaris (copiar de .env.example)
-├── docker-compose.yml          # Postgres + Redis
-└── requirements.txt
+│   ├── config/                 # settings, urls, wsgi
+│   ├── .env.example            # Plantilla de variables (copiar a .env)
+│   └── verso_integrations/
+│       ├── sep1.py             # Contenido dinámico de stellar.toml
+│       ├── sep10.py            # SEP-10 (errores 400 en XDR inválido)
+│       ├── toml_view.py        # stellar.toml con charset UTF-8
+│       ├── kyc_bridge.py       # Lookup KYC por pubkey (core VERSO)
+│       ├── deposit.py          # On-ramp (T2)
+│       ├── withdraw.py         # Off-ramp (T2)
+│       ├── rates.py            # Cotizaciones PEN/USDC (T2)
+│       ├── static/polaris/     # TOML estáticos (local / prod)
+│       └── tests/              # test_sep1.py, test_sep10.py
+├── docker-compose.yml          # Postgres + Redis (reservado para T2; no requerido en T1)
+├── requirements.txt            # Dependencias (raíz; usado por CI y Railway)
+├── runtime.txt                 # Python 3.12
+├── railpack.json               # Build y start en Railway
+└── Procfile                    # Fallback de arranque
 ```
+
+No commitear `backend/.env` ni `venv/`.
 
 ## Requisitos
 
-- Python 3.11+
-- (Opcional) Docker para Postgres y Redis
+- Python **3.12** (ver `runtime.txt`)
+- Git
 
-## Git y GitHub
-
-El repositorio Git está en la **raíz `ANCHOR/`** (no solo en `backend/`).
+## Desarrollo local
 
 ```powershell
 cd ANCHOR
-git status
-git add .
-git commit -m "mensaje"
-git push
-```
-
-No commitear `backend/.env` (secretos). Usar `backend/.env.example` como plantilla.
-
-```powershell
-# 1. Activar entorno virtual
-cd ANCHOR
+python -m venv venv
 .\venv\Scripts\Activate.ps1
+pip install -r requirements.txt
 
-# 2. Configurar variables de entorno
 Copy-Item backend\.env.example backend\.env
+# Editar backend\.env: SIGNING_SEED, SERVER_JWT_KEY, etc.
 
-# 3. Generar claves Stellar testnet y JWT
-python -c "from stellar_sdk import Keypair; import secrets; print('SIGNING_SEED=' + Keypair.random().secret); print('SERVER_JWT_KEY=' + secrets.token_urlsafe(32))"
-# Pegar los valores en backend\.env
-
-# 4. Migraciones
 cd backend
 python manage.py migrate
-
-# 5. Servidor de desarrollo
-python manage.py runserver
+python manage.py runserver 8000
 ```
+
+Generar claves testnet y JWT:
+
+```powershell
+python -c "from stellar_sdk import Keypair; import secrets; print('SIGNING_SEED=' + Keypair.random().secret); print('SERVER_JWT_KEY=' + secrets.token_urlsafe(32))"
+```
+
+> Si el puerto **8000** está ocupado por otro proyecto Django, usa otro puerto (`runserver 8001`) y actualiza `HOST_URL` en `backend/.env`.
 
 ## Verificar SEP-1 y SEP-10
 
-### Producción (testnet — `anchor.versotek.io`)
+### Producción
 
-| Check | URL |
-|-------|-----|
-| stellar.toml (SEP-1) | https://anchor.versotek.io/.well-known/stellar.toml |
-| SEP-10 auth | https://anchor.versotek.io/auth?account=G... |
-| Admin | https://anchor.versotek.io/admin |
+| Check                   | URL                                                 |
+| ----------------------- | --------------------------------------------------- |
+| stellar.toml (SEP-1)    | https://anchor.versotek.io/.well-known/stellar.toml |
+| SEP-10 auth (challenge) | https://anchor.versotek.io/auth?account=G...        |
+| Admin                   | https://anchor.versotek.io/admin                    |
 
-### Local (`python manage.py runserver`)
+### Local
 
-| Check | URL |
-|-------|-----|
-| stellar.toml (SEP-1) | http://localhost:8000/.well-known/stellar.toml |
-| SEP-10 auth | http://localhost:8000/auth?account=G... |
-| Admin | http://localhost:8000/admin |
+| Check                   | URL                                            |
+| ----------------------- | ---------------------------------------------- |
+| stellar.toml (SEP-1)    | http://localhost:8000/.well-known/stellar.toml |
+| SEP-10 auth (challenge) | http://localhost:8000/auth?account=G...        |
+| Admin                   | http://localhost:8000/admin                    |
 
-Validar `stellar.toml` en [Stellar Laboratory](https://laboratory.stellar.org/#account-creator?network=test) o contra el endpoint de producción: [anchor.versotek.io/.well-known/stellar.toml](https://anchor.versotek.io/.well-known/stellar.toml).
+**SEP-10:** el **GET** con `?account=G...` devuelve el challenge. El **POST** exige JSON `{"transaction": "<XDR firmado>"}`; la UI de Django REST Framework en el navegador no sustituye una wallet.
 
-## Postgres (local)
+Validación externa:
+
+- TOML en producción: [anchor.versotek.io/.well-known/stellar.toml](https://anchor.versotek.io/.well-known/stellar.toml)
+- [Stellar Laboratory](https://laboratory.stellar.org/#account-creator?network=test)
+- [Anchor Validator](https://anchor-tests.stellar.org) (testnet; home domain `anchor.versotek.io`)
+
+## Tests
 
 ```powershell
-docker compose up -d
+cd backend
+python manage.py test verso_integrations
 ```
 
-En `backend/.env`:
+En cada **push** y **pull request**, GitHub Actions ejecuta los mismos tests (`.github/workflows/backend-tests.yml`).
+
+## Base de datos (T1)
+
+**Tranche 1 no usa PostgreSQL.** Sin `DATABASE_URL`, Django usa **SQLite** (`backend/db.sqlite3`). Eso basta para SEP-1 y SEP-10 en testnet.
+
+- **Local:** no configures `DATABASE_URL` en `backend/.env` (dejar vacío).
+- **Producción (Railway):** no añadir Postgres ni `DATABASE_URL` en esta entrega.
+- `docker-compose.yml` queda para **T2** (SEP-24/38, sesiones Redis, etc.).
+
+`python manage.py migrate` sigue siendo necesario (tablas de Django/Polaris en SQLite).
+
+## Producción y deploy
+
+- **Dominio:** `anchor.versotek.io`
+- **Plataforma:** Railway conectado a este repo; **push a `main`** dispara deploy automático.
+- **Build:** `railpack.json` → `pip install`, `collectstatic`, `migrate`, `gunicorn`.
+- **Variables:** definir en el dashboard de Railway (nunca en Git). Referencia en `backend/.env.example`.
+- **Sin `DATABASE_URL`** en T1 (SQLite en el contenedor; suficiente para SEP-1/SEP-10).
+
+Valores clave en producción:
 
 ```
-DATABASE_URL=postgres://verso:verso@localhost:5432/verso_anchor
+HOST_URL=https://anchor.versotek.io
+LOCAL_MODE=0
+DEBUG=False
+ALLOWED_HOSTS=anchor.versotek.io,.up.railway.app
 ```
 
-## Deploy en Railway
+La cuenta Stellar de `SIGNING_SEED` debe tener **home domain** `anchor.versotek.io` en testnet.
 
-Guía completa: [RAILWAY.md](RAILWAY.md)
+## Git y ramas
 
-Archivos incluidos: `railpack.json`, `Procfile`, `runtime.txt`
+```powershell
+git checkout main
+git pull origin main
+```
 
-Resumen:
-1. Conectar repo GitHub en Railway
-2. Añadir PostgreSQL y referenciar `DATABASE_URL`
-3. Configurar variables (ver `backend/.env.example` y `RAILWAY.md`)
-4. Dominio custom: `anchor.versotek.io`
-5. `HOST_URL=https://anchor.versotek.io`, `LOCAL_MODE=0`, `DEBUG=False`
+Flujo recomendado: rama feature → **pull request** → merge a `main` → deploy en Railway.
 
 ## Documentación Polaris
 
