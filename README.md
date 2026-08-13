@@ -72,15 +72,23 @@ python manage.py runserver
 
 ## Verificar SEP-1 y SEP-10
 
-Con el servidor corriendo:
+### Producción (testnet — `anchor.versotek.io`)
 
 | Check | URL |
 |-------|-----|
-| stellar.toml | http://localhost:8000/.well-known/stellar.toml |
+| stellar.toml (SEP-1) | https://anchor.versotek.io/.well-known/stellar.toml |
+| SEP-10 auth | https://anchor.versotek.io/auth?account=G... |
+| Admin | https://anchor.versotek.io/admin |
+
+### Local (`python manage.py runserver`)
+
+| Check | URL |
+|-------|-----|
+| stellar.toml (SEP-1) | http://localhost:8000/.well-known/stellar.toml |
 | SEP-10 auth | http://localhost:8000/auth?account=G... |
 | Admin | http://localhost:8000/admin |
 
-Validar `stellar.toml` en [Stellar Laboratory](https://laboratory.stellar.org/#account-creator?network=test).
+Validar `stellar.toml` en [Stellar Laboratory](https://laboratory.stellar.org/#account-creator?network=test) o contra el endpoint de producción: [anchor.versotek.io/.well-known/stellar.toml](https://anchor.versotek.io/.well-known/stellar.toml).
 
 ## Postgres (local)
 
@@ -104,8 +112,8 @@ Resumen:
 1. Conectar repo GitHub en Railway
 2. Añadir PostgreSQL y referenciar `DATABASE_URL`
 3. Configurar variables (ver `backend/.env.example` y `RAILWAY.md`)
-4. Dominio custom: `anchor-testnet.versotek.io`
-5. `HOST_URL=https://...`, `LOCAL_MODE=0`, `DEBUG=False`
+4. Dominio custom: `anchor.versotek.io`
+5. `HOST_URL=https://anchor.versotek.io`, `LOCAL_MODE=0`, `DEBUG=False`
 
 ## Documentación Polaris
 
