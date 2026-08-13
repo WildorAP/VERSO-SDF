@@ -1,0 +1,44 @@
+name: Backend Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r ../requirements.txt
+
+      - name: Generate ephemeral testnet keys for CI
+        run: |
+          python -c "
+          from stellar_sdk import Keypair
+          import secrets, os
+          with open(os.environ['GITHUB_ENV'], 'a') as f:
+              f.write(f'SIGNING_SEED={Keypair.random().secret}\n')
+              f.write(f'DJANGO_SECRET_KEY={secrets.token_urlsafe(50)}\n')
+              f.write(f'SERVER_JWT_KEY={secrets.token_urlsafe(32)}\n')
+          "
+
+      - name: Run Django tests
+        env:
+          ACTIVE_SEPS: "sep-1,sep-10"
+          HOST_URL: "http://localhost:8000"
+          LOCAL_MODE: "1"
+          SEP10_HOME_DOMAINS: "localhost:8000"
+          STELLAR_NETWORK_PASSPHRASE: "Test SDF Network ; September 2015"
+        run: python manage.py test verso_integrations
