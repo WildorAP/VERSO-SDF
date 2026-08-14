@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>VERSO · Stellar Anchor</title>
+  <meta name="description" content="Anchor Stellar de VERSO en testnet. PSAV Perú.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,650&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --paper: #fffdf8;
+      --ink: #1c1917;
+      --ink-soft: #44403c;
+      --muted: #78716c;
+      --line: #e7e5e4;
+      --teal: #0f766e;
+      --teal-soft: #ccfbf1;
+      --sand: #f5f0e8;
+      --testnet: #b45309;
+      --testnet-bg: #fffbeb;
+      --radius: 6px;
+      --serif: "Fraunces", Georgia, "Times New Roman", serif;
+      --sans: "Figtree", "Segoe UI", sans-serif;
+      --mono: "Consolas", "Liberation Mono", monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--sans);
+      font-size: 1.05rem;
+      background: var(--paper);
+      color: var(--ink);
+      line-height: 1.65;
+      min-height: 100vh;
+    }
+
+    .wrap {
+      max-width: 42rem;
+      margin: 0 auto;
+      padding: 2.75rem 1.5rem 3.5rem;
+    }
+
+    .top {
+      margin-bottom: 2.5rem;
+      padding-bottom: 1.5rem;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .top-brand {
+      font-family: var(--serif);
+      font-size: 1.35rem;
+      font-weight: 650;
+      letter-spacing: -0.02em;
+      line-height: 1.1;
+    }
+
+    .top-brand span {
+      display: block;
+      font-family: var(--sans);
+      font-size: 0.78rem;
+      font-weight: 500;
+      color: var(--muted);
+      letter-spacing: 0;
+      margin-top: 0.15rem;
+    }
+
+    h1 {
+      font-family: var(--serif);
+      font-size: clamp(2rem, 5vw, 2.65rem);
+      font-weight: 650;
+      line-height: 1.15;
+      letter-spacing: -0.03em;
+      margin-bottom: 1rem;
+      color: var(--ink);
+    }
+
+    .lede {
+      font-size: 1.1rem;
+      color: var(--ink-soft);
+      margin-bottom: 1.5rem;
+      max-width: 36rem;
+    }
+
+    .lede strong {
+      color: var(--ink);
+      font-weight: 600;
+    }
+
+    .status-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.65rem 1.25rem;
+      font-size: 0.92rem;
+      color: var(--muted);
+      margin-bottom: 2.25rem;
+    }
+
+    .status-row .live {
+      color: var(--teal);
+      font-weight: 600;
+    }
+
+    .status-row .live::before {
+      content: "● ";
+    }
+
+    .tag {
+      display: inline-block;
+      padding: 0.2rem 0.55rem;
+      border-radius: 4px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      background: var(--testnet-bg);
+      color: var(--testnet);
+    }
+
+    .tag-sep {
+      background: var(--sand);
+      color: var(--ink-soft);
+      font-weight: 500;
+    }
+
+    section {
+      margin-bottom: 2rem;
+    }
+
+    section h2 {
+      font-family: var(--serif);
+      font-size: 1.2rem;
+      font-weight: 600;
+      color: var(--ink);
+      margin-bottom: 0.75rem;
+    }
+
+    .account-box {
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      line-height: 1.5;
+      word-break: break-all;
+      padding: 0.85rem 1rem;
+      background: var(--sand);
+      border-radius: var(--radius);
+      border: 1px solid var(--line);
+    }
+
+    .account-box a {
+      color: var(--ink);
+      text-decoration: underline;
+      text-decoration-color: #a8a29e;
+      text-underline-offset: 3px;
+    }
+
+    .account-box a:hover {
+      color: var(--teal);
+      text-decoration-color: var(--teal);
+    }
+
+    .tranches {
+      list-style: none;
+      border-top: 1px solid var(--line);
+    }
+
+    .tranches li {
+      padding: 1rem 0;
+      border-bottom: 1px solid var(--line);
+      display: grid;
+      grid-template-columns: 2.5rem 1fr;
+      gap: 0.25rem 1rem;
+    }
+
+    .tranche-num {
+      font-family: var(--serif);
+      font-size: 1.15rem;
+      font-weight: 600;
+      color: var(--teal);
+    }
+
+    .tranche-title {
+      font-weight: 600;
+      color: var(--ink);
+      margin-bottom: 0.15rem;
+    }
+
+    .tranche-meta {
+      font-size: 0.88rem;
+      color: var(--muted);
+    }
+
+    .tranche-meta em {
+      font-style: normal;
+      color: var(--teal);
+      font-weight: 500;
+    }
+
+    .tranche-meta .later {
+      color: #a8a29e;
+    }
+
+    .links {
+      list-style: none;
+    }
+
+    .links li {
+      padding: 0.65rem 0;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 0.35rem 0.75rem;
+    }
+
+    .links li:first-child {
+      border-top: 1px solid var(--line);
+    }
+
+    .link-name {
+      font-weight: 600;
+      min-width: 6.5rem;
+      color: var(--ink);
+    }
+
+    .link-sep {
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+
+    .links a {
+      font-family: var(--mono);
+      font-size: 0.82rem;
+      color: var(--teal);
+      text-decoration: none;
+      word-break: break-all;
+    }
+
+    .links a:hover {
+      text-decoration: underline;
+    }
+
+    footer {
+      margin-top: 2.5rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid var(--line);
+      font-size: 0.9rem;
+      color: var(--muted);
+    }
+
+    footer nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem 1.25rem;
+      margin-bottom: 1rem;
+    }
+
+    footer a {
+      color: var(--ink-soft);
+      text-decoration: underline;
+      text-decoration-color: #d6d3d1;
+      text-underline-offset: 3px;
+    }
+
+    footer a:hover {
+      color: var(--teal);
+      text-decoration-color: var(--teal);
+    }
+
+    .footnote {
+      font-size: 0.85rem;
+      line-height: 1.55;
+      max-width: 32rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top">
+      <div class="top-brand">
+        VERSO
+        <span>PSAV Perú · Stellar anchor</span>
+      </div>
+    </div>
+
+    <header>
+      <h1>Anchor en {{ network }}</h1>
+      <p class="lede">
+        Este es nuestro punto de anclaje Stellar en <strong>{{ home_domain }}</strong>.
+        Lo usamos para SEP-1 y SEP-10 en testnet — no es la app donde el usuario final opera
+        (eso llega en T2 con SEP-24).
+      </p>
+      <div class="status-row">
+        <span class="live">En línea</span>
+        <span class="tag">{{ network }}</span>
+        {% for sep in active_seps %}
+        <span class="tag tag-sep">{{ sep }}</span>
+        {% endfor %}
+      </div>
+    </header>
+
+    {% if anchor_account %}
+    <section>
+      <h2>Cuenta del anchor</h2>
+      <p class="account-box">
+        <a href="{{ account_explorer }}" target="_blank" rel="noopener noreferrer">{{ anchor_account }}</a>
+      </p>
+    </section>
+    {% endif %}
+
+    <section>
+      <h2>Qué viene en cada tranche</h2>
+      <ol class="tranches">
+        {% for t in tranches %}
+        <li>
+          <span class="tranche-num">{{ t.id }}</span>
+          <div>
+            <p class="tranche-title">{{ t.seps|join:", " }}</p>
+            <p class="tranche-meta">
+              {% if t.status == "live" %}
+              <em>{{ t.status_label }}</em> — {{ t.scope }}
+              {% else %}
+              <span class="later">{{ t.status_label }}</span> — {{ t.scope }}
+              {% endif %}
+            </p>
+          </div>
+        </li>
+        {% endfor %}
+      </ol>
+    </section>
+
+    <section>
+      <h2>Enlaces útiles</h2>
+      <ul class="links">
+        {% for ep in endpoints %}
+        <li>
+          <span class="link-name">{{ ep.label }}</span>
+          {% if ep.sep %}<span class="link-sep">{{ ep.sep }}</span>{% endif %}
+          <a href="{{ ep.url }}">{{ ep.path }}</a>
+        </li>
+        {% endfor %}
+      </ul>
+    </section>
+
+    <footer>
+      <nav>
+        <a href="{{ links.org }}">versotek.io</a>
+        <a href="{{ links.polaris_docs }}">Documentación Polaris</a>
+        <a href="{{ links.stellar_expert }}">Stellar Expert</a>
+        <a href="?format=json">JSON (health check)</a>
+      </nav>
+      <p class="footnote">
+        Página de estado para revisores y equipo técnico.
+        Tranche 1: stellar.toml, autenticación de wallet y depósito simulado verificados en testnet (SCF #44).
+      </p>
+    </footer>
+  </div>
+</body>
+</html>
