@@ -1,7 +1,9 @@
 """
 Bridge to BASE_DE_CLIENTES for KYC lookup by Stellar public key.
 
-Used by SEP-10 post-auth hooks (T1) and SEP-24 onboarding (T2).
+Not yet called anywhere in T1 (SEP-1/SEP-10/simulated deposit). Reserved
+for the SEP-24 interactive webview and DIDIT onboarding redirect (T2),
+where the KYC gate belongs per protocol design.
 """
 
 from django.conf import settings
