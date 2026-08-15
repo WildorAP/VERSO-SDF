@@ -22,9 +22,10 @@ Repositorio separado del core VERSO (`BASE_DE_CLIENTES`, [versotek.io](https://v
 
 - Endpoint público: [anchor.versotek.io/.well-known/stellar.toml](https://anchor.versotek.io/.well-known/stellar.toml), servido por `verso_integrations/sep1.py` (contenido dinámico: cuentas, currencies USDC/PEN/USD, documentación) vía `toml_view.py` (charset UTF-8 forzado).
 - Descubribilidad verificada con el [Stellar Demo Wallet](https://demo-wallet.stellar.org): al agregar el asset USDC con home domain `anchor.versotek.io`, la wallet resolvió el `stellar.toml` correctamente, reconoció el asset y permitió operarlo (balance visible, trustline activa).
-- Health del servicio: confirmado operativo en `https://anchor.versotek.io` (Railway, deploy automático desde `main`).
+- Landing de estado en [anchor.versotek.io/](https://anchor.versotek.io/) (HTML para revisores; manifest JSON en `?format=json`), implementada en `root.py` + `templates/verso_integrations/root.html`.
+- Health del servicio: confirmado operativo en Railway (deploy automático desde `main`).
 
-Ver "Nota de arquitectura" más abajo para las dos desviaciones documentadas respecto al texto original de la propuesta (Polaris en lugar de Anchor Platform Docker; gestión del signing seed sin AWS KMS).
+Ver "Nota de arquitectura" más abajo para las desviaciones documentadas respecto al texto original de la propuesta (Polaris en lugar de Anchor Platform Docker; gestión del signing seed sin AWS KMS; KYC diferido a T2).
 
 ### Deliverable 2 — SEP-10: Wallet authentication connected to VERSO's compliance system
 
@@ -65,8 +66,19 @@ Flujo operador:
 1. Admin → **Simulated fiat deposits** → **Add** (cuenta `G...`, monto PEN y **tipo de cambio**; USDC se calcula solo).
 2. Revisar `bank_instructions` (CCI/CCE ficticio).
 3. Acción **Mark fiat as received** (`pending` → `fiat_confirmed`).
-4. Acción **Disburse USDC on-chain** → envía USDC testnet a la wallet del cliente; guarda `stellar_tx_hash`.
+4. Acción **Disburse USDC on-chain** → pasa por `disbursing`, envía USDC testnet a la wallet del cliente y termina en `disbursed` con `stellar_tx_hash`.
 5. Verificar en [Stellar Expert testnet](https://stellar.expert/explorer/testnet).
+
+**Estados del depósito** (`FiatDeposit.status`):
+
+| Estado | Significado |
+|--------|-------------|
+| `pending` | Creado; esperando transferencia PEN simulada |
+| `fiat_confirmed` | Operador confirmó recepción fiat; listo para desembolsar |
+| `disbursing` | Pago on-chain en curso (bloqueo de fila activo) |
+| `disbursed` | USDC enviado; `stellar_tx_hash` y `disbursed_at` guardados |
+
+Si el pago Stellar falla, el depósito vuelve a `fiat_confirmed` y el error queda en `status_message` — el operador puede reintentar **Disburse USDC on-chain** sin crear un depósito nuevo.
 
 Requisitos testnet: la cuenta del anchor (`SIGNING_SEED`) debe tener trustline USDC + saldo suficiente.
 
@@ -78,7 +90,7 @@ Requisitos testnet: la cuenta del anchor (`SIGNING_SEED`) debe tener trustline U
 | Amount PEN (simulado)     | 10.00                                                              |
 | Tipo de cambio            | 3.4000                                                             |
 | Amount USDC (calculado)   | 2.9411765                                                          |
-| Status final              | `USDC disbursed`                                                   |
+| Status final              | `disbursed` (`USDC disbursed` en admin)                            |
 | Stellar tx hash           | `8d664b23e57faff63b957bfd88279862b73d9c5919eb796783735c02abb7c050` |
 
 Transacción confirmada on-chain en [Stellar Expert (testnet)](https://stellar.expert/explorer/testnet/tx/8d664b23e57faff63b957bfd88279862b73d9c5919eb796783735c02abb7c050): status `Successful`, ledger `4130191`, `GBTV5Q…24UOPB sent 2.9411765 USDC to GCXG…5IFG` — la hot wallet del anchor (`SIGNING_SEED`) transfiriendo USDC real de testnet a la wallet del cliente, disparado por la confirmación manual del operador en el Admin.
@@ -87,9 +99,23 @@ Esto valida el ciclo completo: solicitud de depósito → instrucciones bancaria
 
 **No implementado en T1, diferido a T2:** el criterio de medición "KYC check passes" del texto original del deliverable no está cubierto — el flujo permite crear, confirmar y desembolsar un depósito sin ningún chequeo de KYC de por medio. Ver punto 3 de "Nota de arquitectura".
 
+## Hardening pre-auditoría (depósito simulado)
+
+Mejoras incorporadas en `main` antes de revisión externa (rama `hardening/pre-audit-fixes`):
+
+| Cambio | Archivo | Detalle |
+|--------|---------|---------|
+| Bloqueo de concurrencia | `admin.py` | `select_for_update` evita doble desembolso si dos operadores disparan la acción a la vez |
+| Estado `disbursing` | `models.py`, migración `0003` | Marca el depósito mientras la transacción Stellar está en vuelo |
+| Reintento seguro | `admin.py` | Fallo de red → vuelve a `fiat_confirmed` + `status_message`; no queda en estado inconsistente |
+| Timeout Stellar | `stellar_payout.py` | Transacción con `set_timeout(180)` (antes 30 s) |
+| Sesión admin | `settings.py` | `SESSION_COOKIE_AGE = 600` (10 min de inactividad) |
+
+Cobertura automatizada: `test_deposit_concurrency.py`, `test_stellar_payout.py`.
+
 ## Nota de arquitectura: desviaciones respecto a la propuesta (SCF #44)
 
-La propuesta original describe el uso del **SDF Anchor Platform** (servicio Java/Kotlin distribuido como imagen Docker) con **AWS KMS** para la firma de transacciones. La implementación actual difiere en dos aspectos, documentados a continuación para conocimiento del SDF.
+La propuesta original describe el uso del **SDF Anchor Platform** (servicio Java/Kotlin distribuido como imagen Docker) con **AWS KMS** para la firma de transacciones. La implementación actual difiere en tres aspectos, documentados a continuación para conocimiento del SDF.
 
 **1. Anchor Platform → django-polaris.** Se utiliza [django-polaris](https://django-polaris.readthedocs.io/en/stable/), la implementación de referencia en Python mantenida oficialmente por SDF, integrada directamente en el backend Django de VERSO, en lugar del servicio Anchor Platform desplegado como contenedor independiente. Ambas alternativas son soluciones oficiales de SDF e implementan los mismos SEPs con el mismo nivel de conformidad. Esta elección evita operar dos servicios en runtimes distintos (Python y JVM) y consolida el despliegue en un único proceso. Como consecuencia, el repositorio no incluye un `Dockerfile` de aplicación ni un contenedor "Anchor Platform"; `docker-compose.yml` en el repo es para **desarrollo local** (Postgres + Redis). En **producción (Railway)** la base de datos es **PostgreSQL** gestionado por Railway, enlazado al servicio web vía `DATABASE_URL`.
 
@@ -112,18 +138,26 @@ ANCHOR/
 ├── backend/
 │   ├── manage.py
 │   ├── config/                 # settings, urls, wsgi
+│   ├── templates/
+│   │   └── verso_integrations/
+│   │       └── root.html       # Landing HTML en /
 │   ├── .env.example            # Plantilla de variables (copiar a .env)
 │   └── verso_integrations/
+│       ├── apps.py             # Registro Polaris (toml)
+│       ├── admin.py            # Admin FiatDeposit + acciones de depósito
+│       ├── models.py           # FiatDeposit + estados
+│       ├── migrations/         # 0001–0003 (incl. estado disbursing)
+│       ├── root.py             # Landing / health check en /
 │       ├── sep1.py             # Contenido dinámico de stellar.toml
 │       ├── sep10.py            # SEP-10 (errores 400 en XDR inválido)
 │       ├── toml_view.py        # stellar.toml con charset UTF-8
 │       ├── kyc_bridge.py       # Cliente HTTP al core (preparado; sin hook SEP-10 aún)
-│       ├── deposit.py          # Instrucciones CCI stub + SEP-24 (T2)
+│       ├── deposit.py          # CCI + cálculo USDC (D3); integración SEP-24 en T2
 │       ├── stellar_payout.py   # Envío USDC on-chain (simulación admin)
 │       ├── withdraw.py         # Stub off-ramp (T2)
 │       ├── rates.py            # Stub cotizaciones PEN/USDC (T2)
 │       ├── static/polaris/     # TOML estáticos (local / prod)
-│       └── tests/              # test_sep1.py, test_sep10.py, test_deposit_flow.py
+│       └── tests/              # 6 archivos, 23 tests (ver sección Tests)
 ├── docker-compose.yml          # Postgres + Redis (opcional en local; ver Base de datos)
 ├── requirements.txt            # Dependencias (raíz; usado por CI y Railway)
 ├── runtime.txt                 # Python 3.12
@@ -185,6 +219,17 @@ Validación externa:
 cd backend
 python manage.py test verso_integrations
 ```
+
+**23 tests** en 6 archivos:
+
+| Archivo | Cubre |
+|---------|--------|
+| `test_sep1.py` | Contenido `stellar.toml`, issuers testnet/mainnet |
+| `test_sep10.py` | Errores 400 en POST `/auth` con XDR inválido |
+| `test_deposit_flow.py` | Modelo `FiatDeposit`, CCI, cálculo USDC |
+| `test_root.py` | Landing `/` (HTML y `?format=json`) |
+| `test_deposit_concurrency.py` | Doble disburse no paga dos veces |
+| `test_stellar_payout.py` | Errores de `disburse_usdc` (seed, red, monto) |
 
 En cada **push** y **pull request**, GitHub Actions ejecuta los mismos tests (`.github/workflows/backend-tests.yml`).
 
