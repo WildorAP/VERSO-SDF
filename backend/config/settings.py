@@ -113,3 +113,8 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # VERSO core API (BASE_DE_CLIENTES) — T1+
 VERSO_CORE_API_URL = env("VERSO_CORE_API_URL", default="http://localhost:9000")
 VERSO_CORE_API_KEY = env("VERSO_CORE_API_KEY", default="")
+
+# Cierra la sesión del admin tras 10 minutos de inactividad.
+SESSION_COOKIE_AGE = 600  # segundos
+SESSION_SAVE_EVERY_REQUEST = True
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True

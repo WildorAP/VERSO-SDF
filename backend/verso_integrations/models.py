@@ -16,6 +16,7 @@ class FiatDeposit(models.Model):
     class Status(models.TextChoices):
         PENDING = "pending", "Pending (awaiting bank transfer)"
         FIAT_CONFIRMED = "fiat_confirmed", "Fiat confirmed"
+        DISBURSING = "disbursing", "Disbursing (in progress)"
         DISBURSED = "disbursed", "USDC disbursed"
 
     stellar_account = models.CharField(
