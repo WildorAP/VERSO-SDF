@@ -1,5 +1,6 @@
 from django.contrib import admin, messages
 from django.utils import timezone
+from django.db import transaction
 
 from verso_integrations.deposit import get_cci_deposit_instructions
 from verso_integrations.models import FiatDeposit
@@ -89,40 +90,49 @@ class FiatDepositAdmin(admin.ModelAdmin):
     @admin.action(description="Disburse USDC on-chain (fiat confirmed → disbursed)")
     def disburse_usdc(self, request, queryset):
         for deposit in queryset:
-            if deposit.status != FiatDeposit.Status.FIAT_CONFIRMED:
-                self.message_user(
-                    request,
-                    f"Deposit #{deposit.pk}: skipped (must be fiat confirmed).",
-                    level=messages.WARNING,
-                )
-                continue
+            # --- Fase 1: "reclamar" el depósito con bloqueo de fila (rápido, sin red) ---
+            with transaction.atomic():
+                locked_deposit = FiatDeposit.objects.select_for_update().get(pk=deposit.pk)
+                if locked_deposit.status != FiatDeposit.Status.FIAT_CONFIRMED:
+                    self.message_user(
+                        request,
+                        f"Deposit #{locked_deposit.pk}: skipped (status is {locked_deposit.status}).",
+                        level=messages.WARNING,
+                    )
+                    continue
+                locked_deposit.status = FiatDeposit.Status.DISBURSING
+                locked_deposit.save(update_fields=["status", "updated_at"])
+            # El lock se libera aquí, ANTES de llamar a la red.
+
+            # --- Fase 2: llamada a Stellar, sin ningún lock de base de datos activo ---
             try:
-                tx_hash = send_usdc_on_chain(deposit.stellar_account, deposit.amount_usdc)
-            except StellarPayoutError as exc:
-                deposit.status_message = str(exc)
-                deposit.save(update_fields=["status_message", "updated_at"])
+                tx_hash = send_usdc_on_chain(locked_deposit.stellar_account, locked_deposit.amount_usdc)
+            except Exception as exc:
+                error_message = str(exc) if isinstance(exc, StellarPayoutError) else f"Unexpected error: {exc}"
+                with transaction.atomic():
+                    retry_deposit = FiatDeposit.objects.select_for_update().get(pk=locked_deposit.pk)
+                    retry_deposit.status = FiatDeposit.Status.FIAT_CONFIRMED
+                    retry_deposit.status_message = error_message
+                    retry_deposit.save(update_fields=["status", "status_message", "updated_at"])
                 self.message_user(
                     request,
-                    f"Deposit #{deposit.pk}: disbursement failed — {exc}",
+                    f"Deposit #{locked_deposit.pk}: disbursement failed (safe to retry) — {error_message}",
                     level=messages.ERROR,
                 )
                 continue
 
-            deposit.status = FiatDeposit.Status.DISBURSED
-            deposit.stellar_tx_hash = tx_hash
-            deposit.status_message = ""
-            deposit.disbursed_at = timezone.now()
-            deposit.save(
-                update_fields=[
-                    "status",
-                    "stellar_tx_hash",
-                    "status_message",
-                    "disbursed_at",
-                    "updated_at",
-                ]
-            )
+            # --- Fase 3: confirmar éxito ---
+            with transaction.atomic():
+                final_deposit = FiatDeposit.objects.select_for_update().get(pk=locked_deposit.pk)
+                final_deposit.status = FiatDeposit.Status.DISBURSED
+                final_deposit.stellar_tx_hash = tx_hash
+                final_deposit.status_message = ""
+                final_deposit.disbursed_at = timezone.now()
+                final_deposit.save(
+                    update_fields=["status", "stellar_tx_hash", "status_message", "disbursed_at", "updated_at"]
+                )
             self.message_user(
                 request,
-                f"Deposit #{deposit.pk}: sent {deposit.amount_usdc} USDC — tx {tx_hash}",
+                f"Deposit #{final_deposit.pk}: sent {final_deposit.amount_usdc} USDC — tx {tx_hash}",
                 level=messages.SUCCESS,
             )
