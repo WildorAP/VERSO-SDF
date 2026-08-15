@@ -80,7 +80,7 @@ def disburse_usdc(destination_account: str, amount_usdc: Decimal) -> str:
                 amount=str(amount_usdc),
                 asset=usdc,
             )
-            .set_timeout(30)
+            .set_timeout(180)
             .build()
         )
         transaction.sign(source)
