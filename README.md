@@ -2,7 +2,7 @@
 
 Anchor Stellar de VERSO (PSAV Perú) implementado con **Django + Polaris**.
 
-Repositorio separado del core VERSO (`BASE_DE_CLIENTES`, [versotek.io](https://versotek.io)). `kyc_bridge.py` está preparado para su uso en el flujo de depósito/retiro (T2), no en SEP-10 — ver "Nota de arquitectura".
+Repositorio separado del core VERSO (`BASE_DE_CLIENTES`, [versotek.io](https://versotek.io)).
 
 **Producción (testnet):** https://anchor.versotek.io
 
@@ -25,7 +25,7 @@ Repositorio separado del core VERSO (`BASE_DE_CLIENTES`, [versotek.io](https://v
 - Landing de estado en [anchor.versotek.io/](https://anchor.versotek.io/) (HTML para revisores; manifest JSON en `?format=json`), implementada en `root.py` + `templates/verso_integrations/root.html`.
 - Health del servicio: confirmado operativo en Railway (deploy automático desde `main`).
 
-Ver "Nota de arquitectura" más abajo para las desviaciones documentadas respecto al texto original de la propuesta (Polaris en lugar de Anchor Platform Docker; gestión del signing seed sin AWS KMS; KYC diferido a T2).
+Ver "Nota de arquitectura" más abajo para las desviaciones documentadas (Polaris en lugar de Anchor Platform Docker; gestión del signing seed sin AWS KMS; KYC diferido a T2).
 
 ### Deliverable 2 — SEP-10: Wallet authentication connected to VERSO's compliance system
 
@@ -55,7 +55,7 @@ Resultado obtenido — un JWT válido, emitido por el anchor de VERSO para la cu
 
 El payload decodificado confirma `iss: https://anchor.versotek.io/auth` y `sub` igual a la cuenta que firmó, con timestamps de emisión/expiración correctos — validando el ciclo completo: solicitud de challenge → firma por la wallet del cliente → verificación de firma por el backend → emisión de JWT.
 
-**No implementado en T1, diferido a T2:** la verificación de estado KYC contra el sistema de compliance de VERSO y la redirección a onboarding de DIDIT. `kyc_bridge.py` existe como cliente HTTP funcional, pero no está conectado a ningún punto del código en T1 (ni a SEP-10, ni al flujo de depósito de Deliverable 3) — cero llamadas, cero tests. Ver punto 3 de "Nota de arquitectura" para la justificación de por qué este chequeo se implementará en el webview interactivo de SEP-24 (T2) en lugar de duplicarlo ahora con una versión mínima que luego habría que rehacer.
+**No implementado en T1, diferido a T2:** la verificación de estado KYC contra el sistema de compliance de VERSO y la redirección a onboarding de DIDIT. `kyc_bridge.py` existe como cliente HTTP funcional, Ver punto 3 de "Nota de arquitectura" para la justificación de por qué este chequeo se implementará en el webview interactivo de SEP-24 (T2) en lugar de duplicarlo y eitar trabajo doble.
 
 ### Deliverable 3 — First end-to-end simulated deposit on testnet
 
@@ -71,12 +71,12 @@ Flujo operador:
 
 **Estados del depósito** (`FiatDeposit.status`):
 
-| Estado | Significado |
-|--------|-------------|
-| `pending` | Creado; esperando transferencia PEN simulada |
-| `fiat_confirmed` | Operador confirmó recepción fiat; listo para desembolsar |
-| `disbursing` | Pago on-chain en curso (bloqueo de fila activo) |
-| `disbursed` | USDC enviado; `stellar_tx_hash` y `disbursed_at` guardados |
+| Estado           | Significado                                                |
+| ---------------- | ---------------------------------------------------------- |
+| `pending`        | Creado; esperando transferencia PEN simulada               |
+| `fiat_confirmed` | Operador confirmó recepción fiat; listo para desembolsar   |
+| `disbursing`     | Pago on-chain en curso (bloqueo de fila activo)            |
+| `disbursed`      | USDC enviado; `stellar_tx_hash` y `disbursed_at` guardados |
 
 Si el pago Stellar falla, el depósito vuelve a `fiat_confirmed` y el error queda en `status_message` — el operador puede reintentar **Disburse USDC on-chain** sin crear un depósito nuevo.
 
@@ -103,13 +103,13 @@ Esto valida el ciclo completo: solicitud de depósito → instrucciones bancaria
 
 Mejoras incorporadas en `main` antes de revisión externa (rama `hardening/pre-audit-fixes`):
 
-| Cambio | Archivo | Detalle |
-|--------|---------|---------|
-| Bloqueo de concurrencia | `admin.py` | `select_for_update` evita doble desembolso si dos operadores disparan la acción a la vez |
-| Estado `disbursing` | `models.py`, migración `0003` | Marca el depósito mientras la transacción Stellar está en vuelo |
-| Reintento seguro | `admin.py` | Fallo de red → vuelve a `fiat_confirmed` + `status_message`; no queda en estado inconsistente |
-| Timeout Stellar | `stellar_payout.py` | Transacción con `set_timeout(180)` (antes 30 s) |
-| Sesión admin | `settings.py` | `SESSION_COOKIE_AGE = 600` (10 min de inactividad) |
+| Cambio                  | Archivo                       | Detalle                                                                                       |
+| ----------------------- | ----------------------------- | --------------------------------------------------------------------------------------------- |
+| Bloqueo de concurrencia | `admin.py`                    | `select_for_update` evita doble desembolso si dos operadores disparan la acción a la vez      |
+| Estado `disbursing`     | `models.py`, migración `0003` | Marca el depósito mientras la transacción Stellar está en vuelo                               |
+| Reintento seguro        | `admin.py`                    | Fallo de red → vuelve a `fiat_confirmed` + `status_message`; no queda en estado inconsistente |
+| Timeout Stellar         | `stellar_payout.py`           | Transacción con `set_timeout(180)` (antes 30 s)                                               |
+| Sesión admin            | `settings.py`                 | `SESSION_COOKIE_AGE = 600` (10 min de inactividad)                                            |
 
 Cobertura automatizada: `test_deposit_concurrency.py`, `test_stellar_payout.py`.
 
@@ -141,7 +141,7 @@ ANCHOR/
 │   ├── templates/
 │   │   └── verso_integrations/
 │   │       └── root.html       # Landing HTML en /
-│   ├── .env.example            # Plantilla de variables (copiar a .env)
+│   ├── .env.example            # Plantilla de variables
 │   └── verso_integrations/
 │       ├── apps.py             # Registro Polaris (toml)
 │       ├── admin.py            # Admin FiatDeposit + acciones de depósito
@@ -190,21 +190,21 @@ python manage.py runserver 8000
 
 ### Producción
 
-| Check                   | URL                                                 |
-| ----------------------- | --------------------------------------------------- |
-| Health / landing         | https://anchor.versotek.io/ (HTML; JSON en `?format=json`) |
-| stellar.toml (SEP-1)    | https://anchor.versotek.io/.well-known/stellar.toml |
-| SEP-10 auth (challenge) | https://anchor.versotek.io/auth?account=G...        |
-| Admin                   | https://anchor.versotek.io/admin                    |
+| Check                   | URL                                                        |
+| ----------------------- | ---------------------------------------------------------- |
+| Health / landing        | https://anchor.versotek.io/ (HTML; JSON en `?format=json`) |
+| stellar.toml (SEP-1)    | https://anchor.versotek.io/.well-known/stellar.toml        |
+| SEP-10 auth (challenge) | https://anchor.versotek.io/auth?account=G...               |
+| Admin                   | https://anchor.versotek.io/admin                           |
 
 ### Local
 
-| Check                   | URL                                            |
-| ----------------------- | ---------------------------------------------- |
-| Health / landing         | http://localhost:8000/ (HTML; JSON en `?format=json`) |
-| stellar.toml (SEP-1)    | http://localhost:8000/.well-known/stellar.toml |
-| SEP-10 auth (challenge) | http://localhost:8000/auth?account=G...        |
-| Admin                   | http://localhost:8000/admin                    |
+| Check                   | URL                                                   |
+| ----------------------- | ----------------------------------------------------- |
+| Health / landing        | http://localhost:8000/ (HTML; JSON en `?format=json`) |
+| stellar.toml (SEP-1)    | http://localhost:8000/.well-known/stellar.toml        |
+| SEP-10 auth (challenge) | http://localhost:8000/auth?account=G...               |
+| Admin                   | http://localhost:8000/admin                           |
 
 **SEP-10:** el **GET** con `?account=G...` devuelve el challenge. El **POST** exige JSON `{"transaction": "<XDR firmado>"}`; la UI de Django REST Framework en el navegador no sustituye una wallet.
 
@@ -222,24 +222,24 @@ python manage.py test verso_integrations
 
 **23 tests** en 6 archivos:
 
-| Archivo | Cubre |
-|---------|--------|
-| `test_sep1.py` | Contenido `stellar.toml`, issuers testnet/mainnet |
-| `test_sep10.py` | Errores 400 en POST `/auth` con XDR inválido |
-| `test_deposit_flow.py` | Modelo `FiatDeposit`, CCI, cálculo USDC |
-| `test_root.py` | Landing `/` (HTML y `?format=json`) |
-| `test_deposit_concurrency.py` | Doble disburse no paga dos veces |
-| `test_stellar_payout.py` | Errores de `disburse_usdc` (seed, red, monto) |
+| Archivo                       | Cubre                                             |
+| ----------------------------- | ------------------------------------------------- |
+| `test_sep1.py`                | Contenido `stellar.toml`, issuers testnet/mainnet |
+| `test_sep10.py`               | Errores 400 en POST `/auth` con XDR inválido      |
+| `test_deposit_flow.py`        | Modelo `FiatDeposit`, CCI, cálculo USDC           |
+| `test_root.py`                | Landing `/` (HTML y `?format=json`)               |
+| `test_deposit_concurrency.py` | Doble disburse no paga dos veces                  |
+| `test_stellar_payout.py`      | Errores de `disburse_usdc` (seed, red, monto)     |
 
 En cada **push** y **pull request**, GitHub Actions ejecuta los mismos tests (`.github/workflows/backend-tests.yml`).
 
 ## Base de datos
 
-| Entorno | Motor | Configuración |
-|---------|--------|----------------|
-| **Local** | SQLite (por defecto) | No definir `DATABASE_URL` en `backend/.env` → `backend/db.sqlite3` |
-| **Local con Postgres** | PostgreSQL | `docker compose up -d` + `DATABASE_URL` en `.env` (ver abajo) |
-| **Producción (Railway)** | PostgreSQL | Servicio Postgres en Railway + `DATABASE_URL=${{Postgres.DATABASE_URL}}` en el servicio web |
+| Entorno                  | Motor                | Configuración                                                                               |
+| ------------------------ | -------------------- | ------------------------------------------------------------------------------------------- |
+| **Local**                | SQLite (por defecto) | No definir `DATABASE_URL` en `backend/.env` → `backend/db.sqlite3`                          |
+| **Local con Postgres**   | PostgreSQL           | `docker compose up -d` + `DATABASE_URL` en `.env` (ver abajo)                               |
+| **Producción (Railway)** | PostgreSQL           | Servicio Postgres en Railway + `DATABASE_URL=${{Postgres.DATABASE_URL}}` en el servicio web |
 
 En **Railway** los datos persisten (admin, `FiatDeposit`, tablas Polaris). El `migrate` del deploy (`railpack.json`) aplica migraciones sobre Postgres.
 
@@ -259,7 +259,7 @@ docker compose up -d
 En `backend/.env`:
 
 ```
-DATABASE_URL=postgres://verso:verso@localhost:5432/verso_anchor
+DATABASE_URL=""
 ```
 
 ### Railway — PostgreSQL
@@ -314,7 +314,6 @@ SEP10_HOME_DOMAINS=versotek.io,anchor.versotek.io
 STELLAR_NETWORK_PASSPHRASE=Test SDF Network ; September 2015
 ```
 
-
 La cuenta Stellar de `SIGNING_SEED` debe tener **home domain** `anchor.versotek.io` en testnet.
 
 ## Git y ramas
@@ -332,4 +331,4 @@ Flujo recomendado: rama feature → **pull request** → merge a `main` → depl
 
 ## Licencia
 
-Propietario — VERSO / versotek.io
+Propietario - VERSO / versotek.io
