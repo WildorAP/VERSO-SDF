@@ -1,51 +1,51 @@
 # VERSO Stellar Anchor
 
-Anchor Stellar de VERSO (PSAV Perú) implementado con **Django + Polaris**.
+VERSO's Stellar anchor (PSAV Peru) implemented with **Django + Polaris**.
 
-Repositorio separado del core VERSO (`BASE_DE_CLIENTES`, [versotek.io](https://versotek.io)).
+Repository kept separate from the VERSO core (`BASE_DE_CLIENTES`, [versotek.io](https://versotek.io)).
 
-**Producción (testnet):** https://anchor.versotek.io
+**Production (testnet):** https://anchor.versotek.io
 
 ## Roadmap
 
-| Tranche | SEPs           | Estado                                                                                     |
-| ------- | -------------- | ------------------------------------------------------------------------------------------ |
-| **T1**  | SEP-1, SEP-10  | Completo en testnet (`anchor.versotek.io`) — 3 deliverables verificados, ver detalle abajo |
-| **T2**  | SEP-24, SEP-38 | Pendiente                                                                                  |
-| **T3**  | Mainnet        | Pendiente                                                                                  |
+| Tranche | SEPs           | Status                                                                                  |
+| ------- | -------------- | --------------------------------------------------------------------------------------- |
+| **T1**  | SEP-1, SEP-10  | Complete on testnet (`anchor.versotek.io`) — 3 deliverables verified, see details below |
+| **T2**  | SEP-24, SEP-38 | Pending                                                                                 |
+| **T3**  | Mainnet        | Pending                                                                                 |
 
-## Estado de entregables — Tranche 1 (SCF #44)
+## Deliverable status — Tranche 1 (SCF #44)
 
 ### Deliverable 1 — SEP-1: Anchor Platform live on testnet + stellar.toml published
 
-**Cubierto.** El `stellar.toml` está publicado y es descubrible por wallets SEP-compatibles en testnet.
+**Covered.** The `stellar.toml` file is published and discoverable by SEP-compatible wallets on testnet.
 
-- Endpoint público: [anchor.versotek.io/.well-known/stellar.toml](https://anchor.versotek.io/.well-known/stellar.toml), servido por `verso_integrations/sep1.py` (contenido dinámico: cuentas, currencies USDC/PEN/USD, documentación) vía `toml_view.py` (charset UTF-8 forzado).
-- Descubribilidad verificada con el [Stellar Demo Wallet](https://demo-wallet.stellar.org): al agregar el asset USDC con home domain `anchor.versotek.io`, la wallet resolvió el `stellar.toml` correctamente, reconoció el asset y permitió operarlo (balance visible, trustline activa).
-- Landing de estado en [anchor.versotek.io/](https://anchor.versotek.io/) (HTML para revisores; manifest JSON en `?format=json`), implementada en `root.py` + `templates/verso_integrations/root.html`.
-- Health del servicio: confirmado operativo en Railway (deploy automático desde `main`).
+- Public endpoint: [anchor.versotek.io/.well-known/stellar.toml](https://anchor.versotek.io/.well-known/stellar.toml), served by `verso_integrations/sep1.py` (dynamic content: accounts, USDC/PEN/USD currencies, documentation) via `toml_view.py` (UTF-8 charset enforced).
+- Discoverability verified with the [Stellar Demo Wallet](https://demo-wallet.stellar.org): after adding the USDC asset with home domain `anchor.versotek.io`, the wallet resolved the `stellar.toml` correctly, recognized the asset and allowed operating it (balance visible, trustline active).
+- Status landing page at [anchor.versotek.io/](https://anchor.versotek.io/) (HTML for reviewers; JSON manifest at `?format=json`), implemented in `root.py` + `templates/verso_integrations/root.html`.
+- Service health: confirmed operational on Railway (automatic deploy from `main`).
 
-Ver "Nota de arquitectura" más abajo para las desviaciones documentadas (Polaris en lugar de Anchor Platform Docker; gestión del signing seed sin AWS KMS; KYC diferido a T2).
+See "Architecture note" below for the documented deviations (Polaris instead of Anchor Platform Docker; signing seed management without AWS KMS; KYC deferred to T2).
 
 ### Deliverable 2 — SEP-10: Wallet authentication connected to VERSO's compliance system
 
-**Cubierto en su componente de autenticación.** El flujo de autenticación SEP-10 fue verificado de punta a punta contra el deploy real en testnet, con el Stellar CLI, siguiendo el procedimiento oficial documentado por Stellar ([developers.stellar.org — Testing Your Configuration](https://developers.stellar.org/docs/tools/cli)):
+**Covered in its authentication component.** The SEP-10 authentication flow was verified end-to-end against the live testnet deployment using the Stellar CLI, following the procedure officially documented by Stellar ([developers.stellar.org — Testing Your Configuration](https://developers.stellar.org/docs/tools/cli)):
 
 ```powershell
-# 1. Solicitar el challenge
+# 1. Request the challenge
 $CHALLENGE_RESPONSE = curl.exe -s "https://anchor.versotek.io/auth?account=$ACCOUNT_ID"
 $CHALLENGE_XDR = $CHALLENGE_RESPONSE | jq -r '.transaction'
 
-# 2. Firmar el challenge con la wallet del cliente (testnet)
+# 2. Sign the challenge with the client wallet (testnet)
 $SIGNED_CHALLENGE_XDR = ($CHALLENGE_XDR | stellar tx sign --sign-with-key $SECRET_SEED --network testnet 2>&1) | Select-Object -Last 1
 
-# 3. Enviar la firma y recibir el JWT
+# 3. Submit the signature and receive the JWT
 $body = @{ transaction = $SIGNED_CHALLENGE_XDR } | ConvertTo-Json -Compress
 Set-Content -Path "$env:TEMP\sep10_body.json" -Value $body -Encoding ascii -NoNewline
 curl.exe -X POST "https://anchor.versotek.io/auth" -H "Content-Type: application/json" -d "@$env:TEMP\sep10_body.json"
 ```
 
-Resultado obtenido — un JWT válido, emitido por el anchor de VERSO para la cuenta que firmó el challenge:
+Result obtained — a valid JWT, issued by the VERSO anchor for the account that signed the challenge:
 
 ```json
 {
@@ -53,124 +53,122 @@ Resultado obtenido — un JWT válido, emitido por el anchor de VERSO para la cu
 }
 ```
 
-El payload decodificado confirma `iss: https://anchor.versotek.io/auth` y `sub` igual a la cuenta que firmó, con timestamps de emisión/expiración correctos — validando el ciclo completo: solicitud de challenge → firma por la wallet del cliente → verificación de firma por el backend → emisión de JWT.
-
-**No implementado en T1, diferido a T2:** la verificación de estado KYC contra el sistema de compliance de VERSO y la redirección a onboarding de DIDIT. `kyc_bridge.py` existe como cliente HTTP funcional, Ver punto 3 de "Nota de arquitectura" para la justificación de por qué este chequeo se implementará en el webview interactivo de SEP-24 (T2) en lugar de duplicarlo y eitar trabajo doble.
+The decoded payload confirms `iss: https://anchor.versotek.io/auth` and a `sub` matching the signing account, with correct issued-at/expiration timestamps — validating the full cycle: challenge request → signature by the client wallet → signature verification by the backend → JWT issuance.
 
 ### Deliverable 3 — First end-to-end simulated deposit on testnet
 
-**Implementado (simulación vía Admin).** Modelo `FiatDeposit`, acciones en Django Admin y pago USDC on-chain con `SIGNING_SEED`.
+**Implemented (simulation via Django Admin).** `FiatDeposit` model, Django Admin actions and on-chain USDC payout signed with `SIGNING_SEED`.
 
-Flujo operador:
+Operator flow:
 
-1. Admin → **Simulated fiat deposits** → **Add** (cuenta `G...`, monto PEN y **tipo de cambio**; USDC se calcula solo).
-2. Revisar `bank_instructions` (CCI/CCE ficticio).
-3. Acción **Mark fiat as received** (`pending` → `fiat_confirmed`).
-4. Acción **Disburse USDC on-chain** → pasa por `disbursing`, envía USDC testnet a la wallet del cliente y termina en `disbursed` con `stellar_tx_hash`.
-5. Verificar en [Stellar Expert testnet](https://stellar.expert/explorer/testnet).
+1. Admin → **Simulated fiat deposits** → **Add** (client `G...` account, PEN amount and **exchange rate**; USDC is computed automatically).
+2. Review `bank_instructions` (simulated CCI/CCE details).
+3. Action **Mark fiat as received** (`pending` → `fiat_confirmed`).
+4. Action **Disburse USDC on-chain** → moves through `disbursing`, sends testnet USDC to the client wallet and ends in `disbursed` with `stellar_tx_hash`.
+5. Verify on [Stellar Expert testnet](https://stellar.expert/explorer/testnet).
 
-**Estados del depósito** (`FiatDeposit.status`):
+**Deposit states** (`FiatDeposit.status`):
 
-| Estado           | Significado                                                |
-| ---------------- | ---------------------------------------------------------- |
-| `pending`        | Creado; esperando transferencia PEN simulada               |
-| `fiat_confirmed` | Operador confirmó recepción fiat; listo para desembolsar   |
-| `disbursing`     | Pago on-chain en curso (bloqueo de fila activo)            |
-| `disbursed`      | USDC enviado; `stellar_tx_hash` y `disbursed_at` guardados |
+| State            | Meaning                                                   |
+| ---------------- | --------------------------------------------------------- |
+| `pending`        | Created; awaiting simulated PEN transfer                  |
+| `fiat_confirmed` | Operator confirmed fiat receipt; ready to disburse        |
+| `disbursing`     | On-chain payment in flight (row lock held)                |
+| `disbursed`      | USDC sent; `stellar_tx_hash` and `disbursed_at` persisted |
 
-Si el pago Stellar falla, el depósito vuelve a `fiat_confirmed` y el error queda en `status_message` — el operador puede reintentar **Disburse USDC on-chain** sin crear un depósito nuevo.
+If the Stellar payment fails, the deposit reverts to `fiat_confirmed` and the error is stored in `status_message` — the operator can retry **Disburse USDC on-chain** without creating a new deposit.
 
-Requisitos testnet: la cuenta del anchor (`SIGNING_SEED`) debe tener trustline USDC + saldo suficiente.
+Testnet requirements: the anchor account (`SIGNING_SEED`) must hold an active USDC trustline and sufficient balance.
 
-**Verificado en producción (Railway).** Ciclo completo ejecutado contra `anchor.versotek.io/admin`, con la misma cuenta de cliente usada en la prueba de SEP-10 (Deliverable 2):
+**Verified in production (Railway).** Full cycle executed against `anchor.versotek.io/admin`, using the same client account as the SEP-10 test (Deliverable 2):
 
-| Campo                     | Valor                                                              |
-| ------------------------- | ------------------------------------------------------------------ |
-| Stellar account (cliente) | `GCXGLWL7GEPUDCCZABQVLHTZLDWWXPTURGXODJ6JF6BVJSO4KWU45IFG`         |
-| Amount PEN (simulado)     | 10.00                                                              |
-| Tipo de cambio            | 3.4000                                                             |
-| Amount USDC (calculado)   | 2.9411765                                                          |
-| Status final              | `disbursed` (`USDC disbursed` en admin)                            |
-| Stellar tx hash           | `8d664b23e57faff63b957bfd88279862b73d9c5919eb796783735c02abb7c050` |
+| Field                    | Value                                                              |
+| ------------------------ | ------------------------------------------------------------------ |
+| Stellar account (client) | `GCXGLWL7GEPUDCCZABQVLHTZLDWWXPTURGXODJ6JF6BVJSO4KWU45IFG`         |
+| Amount PEN (simulated)   | 10.00                                                              |
+| Exchange rate            | 3.4000                                                             |
+| Amount USDC (computed)   | 2.9411765                                                          |
+| Final status             | `disbursed` (`USDC disbursed` in admin)                            |
+| Stellar tx hash          | `8d664b23e57faff63b957bfd88279862b73d9c5919eb796783735c02abb7c050` |
 
-Transacción confirmada on-chain en [Stellar Expert (testnet)](https://stellar.expert/explorer/testnet/tx/8d664b23e57faff63b957bfd88279862b73d9c5919eb796783735c02abb7c050): status `Successful`, ledger `4130191`, `GBTV5Q…24UOPB sent 2.9411765 USDC to GCXG…5IFG` — la hot wallet del anchor (`SIGNING_SEED`) transfiriendo USDC real de testnet a la wallet del cliente, disparado por la confirmación manual del operador en el Admin.
+Transaction confirmed on-chain on [Stellar Expert (testnet)](https://stellar.expert/explorer/testnet/tx/8d664b23e57faff63b957bfd88279862b73d9c5919eb796783735c02abb7c050): status `Successful`, ledger `4130191`, `GBTV5Q…24UOPB sent 2.9411765 USDC to GCXG…5IFG` — the anchor hot wallet (`SIGNING_SEED`) transferring real testnet USDC to the client wallet, triggered by the operator's manual confirmation in the Admin.
 
-Esto valida el ciclo completo: solicitud de depósito → instrucciones bancarias simuladas → confirmación manual del operador (recepción PEN simulada) → desembolso automático de USDC on-chain → estado final trackeado — cumpliendo el criterio de medición del deliverable ("all transaction states tracked", "on-chain USDC disbursement confirmed on Stellar testnet").
+This validates the full cycle: deposit request → simulated bank instructions → manual operator confirmation (simulated PEN receipt) → automatic on-chain USDC disbursement → final state tracked — meeting the deliverable's measurement criteria ("all transaction states tracked", "on-chain USDC disbursement confirmed on Stellar testnet").
 
-**No implementado en T1, diferido a T2:** el criterio de medición "KYC check passes" del texto original del deliverable no está cubierto — el flujo permite crear, confirmar y desembolsar un depósito sin ningún chequeo de KYC de por medio. Ver punto 3 de "Nota de arquitectura".
+**Not implemented in T1, deferred to T2:** the "KYC check passes" measurement criterion from the original deliverable text is not covered — the flow allows creating, confirming and disbursing a deposit without any KYC check in between. See point 3 of the "Architecture note".
 
-## Hardening pre-auditoría (depósito simulado)
+## Pre-audit hardening (simulated deposit)
 
-Mejoras incorporadas en `main` antes de revisión externa (rama `hardening/pre-audit-fixes`):
+Improvements merged into `main` before external review (branch `hardening/pre-audit-fixes`):
 
-| Cambio                  | Archivo                       | Detalle                                                                                       |
-| ----------------------- | ----------------------------- | --------------------------------------------------------------------------------------------- |
-| Bloqueo de concurrencia | `admin.py`                    | `select_for_update` evita doble desembolso si dos operadores disparan la acción a la vez      |
-| Estado `disbursing`     | `models.py`, migración `0003` | Marca el depósito mientras la transacción Stellar está en vuelo                               |
-| Reintento seguro        | `admin.py`                    | Fallo de red → vuelve a `fiat_confirmed` + `status_message`; no queda en estado inconsistente |
-| Timeout Stellar         | `stellar_payout.py`           | Transacción con `set_timeout(180)` (antes 30 s)                                               |
-| Sesión admin            | `settings.py`                 | `SESSION_COOKIE_AGE = 600` (10 min de inactividad)                                            |
+| Change              | File                          | Detail                                                                                       |
+| ------------------- | ----------------------------- | -------------------------------------------------------------------------------------------- |
+| Concurrency locking | `admin.py`                    | `select_for_update` prevents double disbursement if two operators trigger the action at once |
+| `disbursing` state  | `models.py`, migration `0003` | Marks the deposit while the Stellar transaction is in flight                                 |
+| Safe retry          | `admin.py`                    | Network failure → reverts to `fiat_confirmed` + `status_message`; never left inconsistent    |
+| Stellar timeout     | `stellar_payout.py`           | Transaction built with `set_timeout(180)` (previously 30 s)                                  |
+| Admin session       | `settings.py`                 | `SESSION_COOKIE_AGE = 600` (10 min of inactivity)                                            |
 
-Cobertura automatizada: `test_deposit_concurrency.py`, `test_stellar_payout.py`.
+Automated coverage: `test_deposit_concurrency.py`, `test_stellar_payout.py`.
 
-## Nota de arquitectura: desviaciones respecto a la propuesta (SCF #44)
+## Architecture note: deviations from the proposal (SCF #44)
 
-La propuesta original describe el uso del **SDF Anchor Platform** (servicio Java/Kotlin distribuido como imagen Docker) con **AWS KMS** para la firma de transacciones. La implementación actual difiere en tres aspectos, documentados a continuación para conocimiento del SDF.
+The original proposal describes using the **SDF Anchor Platform** (Java/Kotlin service distributed as a Docker image) with **AWS KMS** for transaction signing. The current implementation differs in three respects, documented below for SDF's awareness.
 
-**1. Anchor Platform → django-polaris.** Se utiliza [django-polaris](https://django-polaris.readthedocs.io/en/stable/), la implementación de referencia en Python mantenida oficialmente por SDF, integrada directamente en el backend Django de VERSO, en lugar del servicio Anchor Platform desplegado como contenedor independiente. Ambas alternativas son soluciones oficiales de SDF e implementan los mismos SEPs con el mismo nivel de conformidad. Esta elección evita operar dos servicios en runtimes distintos (Python y JVM) y consolida el despliegue en un único proceso. Como consecuencia, el repositorio no incluye un `Dockerfile` de aplicación ni un contenedor "Anchor Platform"; `docker-compose.yml` en el repo es para **desarrollo local** (Postgres + Redis). En **producción (Railway)** la base de datos es **PostgreSQL** gestionado por Railway, enlazado al servicio web vía `DATABASE_URL`.
+**1. Anchor Platform → django-polaris.** We use [django-polaris](https://django-polaris.readthedocs.io/en/stable/), the Python reference implementation officially maintained by SDF, integrated directly into VERSO's Django backend, instead of the Anchor Platform service deployed as a standalone container. Both alternatives are official SDF solutions and implement the same SEPs with the same level of conformance. This choice avoids operating two services on different runtimes (Python and JVM) and consolidates the deployment into a single process. As a consequence, the repository does not include an application `Dockerfile` or an "Anchor Platform" container; `docker-compose.yml` in this repo is for **local development** (Postgres + Redis). In **production (Railway)** the database is **PostgreSQL** managed by Railway, linked to the web service via `DATABASE_URL`.
 
-**2. AWS KMS: no implementado.** La firma de transacciones Stellar utiliza el esquema Ed25519, algoritmo no soportado por la API `Sign` de AWS KMS (limitada a RSA y ECDSA sobre curvas NIST). Adicionalmente, django-polaris no expone un punto de extensión para delegar la firma a un servicio externo: el signing seed se carga en memoria al iniciar el proceso y se utiliza directamente mediante `stellar_sdk`.
+**2. AWS KMS: not implemented.** Stellar transaction signing uses the Ed25519 scheme, an algorithm not supported by the AWS KMS `Sign` API (limited to RSA and ECDSA over NIST curves). Additionally, django-polaris does not expose an extension point to delegate signing to an external service: the signing seed is loaded into memory at process startup and used directly through `stellar_sdk`.
 
-En consecuencia, `SIGNING_SEED` se gestiona actualmente como variable de entorno en Railway, sin una capa adicional de custodia tipo KMS o HSM. Esta es una decisión consciente y temporal para la presente entrega: el entorno es testnet, sin fondos reales en riesgo, y Railway cifra las variables de entorno en reposo. Antes de operar en mainnet, esta gestión del secreto se migrará a un esquema de custodia más robusto (por ejemplo AWS Secrets Manager con acceso restringido por IAM y auditoría vía CloudTrail, y/o un proveedor de custodia con soporte nativo para Ed25519 como Turnkey o Fireblocks).
+Consequently, `SIGNING_SEED` is currently managed as an environment variable on Railway, without an additional custody layer such as KMS or an HSM. This is a deliberate and temporary decision for this delivery: the environment is testnet, with no real funds at risk, and Railway encrypts environment variables at rest. Before operating on mainnet, this secret management will be migrated to a more robust custody scheme (for example AWS Secrets Manager with IAM-restricted access and CloudTrail auditing, and/or a custody provider with native Ed25519 support such as Turnkey or Fireblocks).
 
-**3. Verificación de KYC: no implementada en T1, diferida a T2 (no reubicada aún en código).** La propuesta interna original planteaba verificar el estado de KYC del cliente y emitir el JWT de forma condicional dentro del mismo endpoint de autenticación SEP-10. Este planteamiento se corrige por no ser consistente con la separación de responsabilidades del protocolo: SEP-10 certifica exclusivamente la posesión de la cuenta Stellar (verificación de firma) y no debe depender de, ni exponer, el estado de compliance del cliente. El endpoint SEP-10 en T1 emite el JWT únicamente en base a la verificación criptográfica de la firma, conforme al estándar.
+**3. KYC verification: not implemented in T1, deferred to T2 (not yet relocated in code).** The original internal proposal called for verifying the client's KYC status and issuing the JWT conditionally inside the SEP-10 authentication endpoint itself. This approach is corrected because it is inconsistent with the protocol's separation of concerns: SEP-10 exclusively certifies ownership of the Stellar account (signature verification) and must not depend on, nor expose, the client's compliance status. The SEP-10 endpoint in T1 issues the JWT solely on the basis of cryptographic signature verification, per the standard.
 
-El punto correcto del protocolo para el chequeo de KYC y la redirección a onboarding de DIDIT es el webview interactivo de SEP-24 (Tranche 2), no el flujo de depósito simulado sin webview de T1. Por eso se decidió **no** construir en T1 una versión mínima de ese chequeo (por ejemplo, un gate simple en el panel de operador) — esa versión sería descartable en cuanto se implemente SEP-24 en T2, donde el chequeo de KYC y el onboarding DIDIT viven naturalmente integrados al webview. `kyc_bridge.py` existe en el repo como cliente HTTP funcional contra el sistema de compliance de VERSO, listo para conectarse en T2, pero **en T1 no tiene ningún caller**: ni SEP-10 ni el flujo de depósito simulado lo invocan. En consecuencia, el criterio de medición "KYC check passes" del texto original de los Deliverables 2 y 3 queda explícitamente diferido a T2.
+The correct place in the protocol for the KYC check and the DIDIT onboarding redirect is the SEP-24 interactive webview (Tranche 2), not T1's simulated deposit flow without a webview. For that reason we deliberately chose **not** to build a minimal version of that check in T1 (for example, a simple gate in the operator panel) — that version would be discarded as soon as SEP-24 is implemented in T2, where the KYC check and DIDIT onboarding live naturally integrated into the webview. `kyc_bridge.py` exists in the repo as a functional HTTP client against VERSO's compliance system, ready to be wired up in T2, but **it has no caller in T1**: neither SEP-10 nor the simulated deposit flow invokes it. Consequently, the "KYC check passes" measurement criterion from the original text of Deliverables 2 and 3 is explicitly deferred to T2.
 
-## Estructura del repo
+## Repository structure
 
-El repositorio Git vive en la **raíz `ANCHOR/`**. Django está en `backend/`; Railway y el build usan la raíz (`railpack.json` hace `cd backend`).
+The Git repository lives at the **`ANCHOR/` root**. Django sits under `backend/`; Railway and the build use the root (`railpack.json` runs `cd backend`).
 
 ```
 ANCHOR/
 ├── .github/workflows/
-│   └── backend-tests.yml       # CI: corre todo verso_integrations (SEP-1, SEP-10, depósito) en push y PR
+│   └── backend-tests.yml       # CI: runs all of verso_integrations (SEP-1, SEP-10, deposit) on push and PR
 ├── backend/
 │   ├── manage.py
 │   ├── config/                 # settings, urls, wsgi
 │   ├── templates/
 │   │   └── verso_integrations/
-│   │       └── root.html       # Landing HTML en /
-│   ├── .env.example            # Plantilla de variables
+│   │       └── root.html       # HTML landing page at /
+│   ├── .env.example            # Environment variable template
 │   └── verso_integrations/
-│       ├── apps.py             # Registro Polaris (toml)
-│       ├── admin.py            # Admin FiatDeposit + acciones de depósito
-│       ├── models.py           # FiatDeposit + estados
-│       ├── migrations/         # 0001–0003 (incl. estado disbursing)
-│       ├── root.py             # Landing / health check en /
-│       ├── sep1.py             # Contenido dinámico de stellar.toml
-│       ├── sep10.py            # SEP-10 (errores 400 en XDR inválido)
-│       ├── toml_view.py        # stellar.toml con charset UTF-8
-│       ├── kyc_bridge.py       # Cliente HTTP al core (preparado; sin hook SEP-10 aún)
-│       ├── deposit.py          # CCI + cálculo USDC (D3); integración SEP-24 en T2
-│       ├── stellar_payout.py   # Envío USDC on-chain (simulación admin)
-│       ├── withdraw.py         # Stub off-ramp (T2)
-│       ├── rates.py            # Stub cotizaciones PEN/USDC (T2)
-│       ├── static/polaris/     # TOML estáticos (local / prod)
-│       └── tests/              # 6 archivos, 23 tests (ver sección Tests)
-├── docker-compose.yml          # Postgres + Redis (opcional en local; ver Base de datos)
-├── requirements.txt            # Dependencias (raíz; usado por CI y Railway)
+│       ├── apps.py             # Polaris registration (toml)
+│       ├── admin.py            # FiatDeposit admin + deposit actions
+│       ├── models.py           # FiatDeposit + states
+│       ├── migrations/         # 0001–0003 (incl. disbursing state)
+│       ├── root.py             # Landing / health check at /
+│       ├── sep1.py             # Dynamic stellar.toml content
+│       ├── sep10.py            # SEP-10 (400 errors on invalid XDR)
+│       ├── toml_view.py        # stellar.toml with UTF-8 charset
+│       ├── kyc_bridge.py       # HTTP client to the core (prepared; no SEP-10 hook yet)
+│       ├── deposit.py          # CCI + USDC computation (D3); SEP-24 integration in T2
+│       ├── stellar_payout.py   # On-chain USDC payout (admin simulation)
+│       ├── withdraw.py         # Off-ramp stub (T2)
+│       ├── rates.py            # PEN/USDC quotes stub (T2)
+│       ├── static/polaris/     # Static TOML files (local / prod)
+│       └── tests/              # 6 files, 23 tests (see Tests section)
+├── docker-compose.yml          # Postgres + Redis (optional locally; see Database)
+├── requirements.txt            # Dependencies (root; used by CI and Railway)
 ├── runtime.txt                 # Python 3.12
-├── railpack.json               # Build y start en Railway
-└── Procfile                    # Fallback de arranque
+├── railpack.json               # Build and start on Railway
+└── Procfile                    # Startup fallback
 ```
 
-## Requisitos
+## Requirements
 
-- Python **3.12** (ver `runtime.txt`)
+- Python **3.12** (see `runtime.txt`)
 - Git
 
-## Desarrollo local
+## Local development
 
 ```powershell
 cd ANCHOR
@@ -179,20 +177,20 @@ python -m venv venv
 pip install -r requirements.txt
 
 Copy-Item backend\.env.example backend\.env
-# Editar backend\.env: SIGNING_SEED, SERVER_JWT_KEY, etc.
+# Edit backend\.env: SIGNING_SEED, SERVER_JWT_KEY, etc.
 
 cd backend
 python manage.py migrate
 python manage.py runserver 8000
 ```
 
-## Verificar SEP-1 y SEP-10
+## Verifying SEP-1 and SEP-10
 
-### Producción
+### Production
 
 | Check                   | URL                                                        |
 | ----------------------- | ---------------------------------------------------------- |
-| Health / landing        | https://anchor.versotek.io/ (HTML; JSON en `?format=json`) |
+| Health / landing        | https://anchor.versotek.io/ (HTML; JSON at `?format=json`) |
 | stellar.toml (SEP-1)    | https://anchor.versotek.io/.well-known/stellar.toml        |
 | SEP-10 auth (challenge) | https://anchor.versotek.io/auth?account=G...               |
 | Admin                   | https://anchor.versotek.io/admin                           |
@@ -201,16 +199,16 @@ python manage.py runserver 8000
 
 | Check                   | URL                                                   |
 | ----------------------- | ----------------------------------------------------- |
-| Health / landing        | http://localhost:8000/ (HTML; JSON en `?format=json`) |
+| Health / landing        | http://localhost:8000/ (HTML; JSON at `?format=json`) |
 | stellar.toml (SEP-1)    | http://localhost:8000/.well-known/stellar.toml        |
 | SEP-10 auth (challenge) | http://localhost:8000/auth?account=G...               |
 | Admin                   | http://localhost:8000/admin                           |
 
-**SEP-10:** el **GET** con `?account=G...` devuelve el challenge. El **POST** exige JSON `{"transaction": "<XDR firmado>"}`; la UI de Django REST Framework en el navegador no sustituye una wallet.
+**SEP-10:** a **GET** with `?account=G...` returns the challenge. The **POST** requires JSON `{"transaction": "<signed XDR>"}`; the Django REST Framework browsable UI is not a substitute for a wallet.
 
-Validación externa:
+External validation:
 
-- TOML en producción: [anchor.versotek.io/.well-known/stellar.toml](https://anchor.versotek.io/.well-known/stellar.toml)
+- Production TOML: [anchor.versotek.io/.well-known/stellar.toml](https://anchor.versotek.io/.well-known/stellar.toml)
 - [Stellar Laboratory](https://laboratory.stellar.org/#account-creator?network=test)
 
 ## Tests
@@ -220,43 +218,43 @@ cd backend
 python manage.py test verso_integrations
 ```
 
-**23 tests** en 6 archivos:
+**23 tests** across 6 files:
 
-| Archivo                       | Cubre                                             |
-| ----------------------------- | ------------------------------------------------- |
-| `test_sep1.py`                | Contenido `stellar.toml`, issuers testnet/mainnet |
-| `test_sep10.py`               | Errores 400 en POST `/auth` con XDR inválido      |
-| `test_deposit_flow.py`        | Modelo `FiatDeposit`, CCI, cálculo USDC           |
-| `test_root.py`                | Landing `/` (HTML y `?format=json`)               |
-| `test_deposit_concurrency.py` | Doble disburse no paga dos veces                  |
-| `test_stellar_payout.py`      | Errores de `disburse_usdc` (seed, red, monto)     |
+| File                          | Covers                                          |
+| ----------------------------- | ----------------------------------------------- |
+| `test_sep1.py`                | `stellar.toml` content, testnet/mainnet issuers |
+| `test_sep10.py`               | 400 errors on POST `/auth` with invalid XDR     |
+| `test_deposit_flow.py`        | `FiatDeposit` model, CCI, USDC computation      |
+| `test_root.py`                | Landing `/` (HTML and `?format=json`)           |
+| `test_deposit_concurrency.py` | Double disburse does not pay twice              |
+| `test_stellar_payout.py`      | `disburse_usdc` errors (seed, network, amount)  |
 
-En cada **push** y **pull request**, GitHub Actions ejecuta los mismos tests (`.github/workflows/backend-tests.yml`).
+On every **push** and **pull request**, GitHub Actions runs the same tests (`.github/workflows/backend-tests.yml`).
 
-## Base de datos
+## Database
 
-| Entorno                  | Motor                | Configuración                                                                               |
-| ------------------------ | -------------------- | ------------------------------------------------------------------------------------------- |
-| **Local**                | SQLite (por defecto) | No definir `DATABASE_URL` en `backend/.env` → `backend/db.sqlite3`                          |
-| **Local con Postgres**   | PostgreSQL           | `docker compose up -d` + `DATABASE_URL` en `.env` (ver abajo)                               |
-| **Producción (Railway)** | PostgreSQL           | Servicio Postgres en Railway + `DATABASE_URL=${{Postgres.DATABASE_URL}}` en el servicio web |
+| Environment              | Engine           | Configuration                                                                           |
+| ------------------------ | ---------------- | --------------------------------------------------------------------------------------- |
+| **Local**                | SQLite (default) | Leave `DATABASE_URL` undefined in `backend/.env` → `backend/db.sqlite3`                 |
+| **Local with Postgres**  | PostgreSQL       | `docker compose up -d` + `DATABASE_URL` in `.env` (see below)                           |
+| **Production (Railway)** | PostgreSQL       | Railway Postgres service + `DATABASE_URL=${{Postgres.DATABASE_URL}}` on the web service |
 
-En **Railway** los datos persisten (admin, `FiatDeposit`, tablas Polaris). El `migrate` del deploy (`railpack.json`) aplica migraciones sobre Postgres.
+On **Railway** the data persists (admin, `FiatDeposit`, Polaris tables). The deploy's `migrate` step (`railpack.json`) applies migrations against Postgres.
 
-### Local con SQLite (por defecto)
+### Local with SQLite (default)
 
 ```powershell
 cd backend
 python manage.py migrate
 ```
 
-### Local con Postgres (opcional, `docker-compose.yml`)
+### Local with Postgres (optional, `docker-compose.yml`)
 
 ```powershell
 docker compose up -d
 ```
 
-En `backend/.env`:
+In `backend/.env`:
 
 ```
 DATABASE_URL=""
@@ -264,41 +262,41 @@ DATABASE_URL=""
 
 ### Railway — PostgreSQL
 
-1. Añadir servicio **PostgreSQL** al proyecto (CLI: `railway add -d postgres`, o dashboard).
-2. En el servicio **web**, variable:
+1. Add a **PostgreSQL** service to the project (CLI: `railway add -d postgres`, or the dashboard).
+2. On the **web** service, set the variable:
 
 ```
 DATABASE_URL=${{Postgres.DATABASE_URL}}
 ```
 
-(`Postgres` = nombre del servicio de base de datos en tu proyecto.)
+(`Postgres` = the name of the database service in your project.)
 
-3. Redeploy → `migrate` crea/actualiza tablas en Postgres.
+3. Redeploy → `migrate` creates/updates the tables in Postgres.
 
-**Crear superuser en producción:** desde tu PC, con venv activado y la **URL pública** de Postgres (no `postgres.railway.internal`):
+**Creating a superuser in production:** from your machine, with the venv activated and the **public URL** of Postgres (not `postgres.railway.internal`):
 
 ```powershell
 .\venv\Scripts\Activate.ps1
 cd backend
-$env:DATABASE_URL = "<DATABASE_PUBLIC_URL de Railway>"
-$env:DJANGO_SECRET_KEY = "temporal"
+$env:DATABASE_URL = "<Railway DATABASE_PUBLIC_URL>"
+$env:DJANGO_SECRET_KEY = "temporary"
 python manage.py createsuperuser
 ```
 
-`railway run` inyecta la URL **interna**; solo funciona dentro de la red Railway, no desde Windows.
+`railway run` injects the **internal** URL; it only works inside the Railway network, not from Windows.
 
-## Producción y deploy
+## Production and deployment
 
-- **Dominio:** `anchor.versotek.io`
-- **Plataforma:** Railway conectado a este repo; **push a `main`** dispara deploy automático.
+- **Domain:** `anchor.versotek.io`
+- **Platform:** Railway connected to this repo; **pushing to `main`** triggers an automatic deploy.
 - **Build:** `railpack.json` → `pip install`, `collectstatic`, `migrate`, `gunicorn`.
-- **Base de datos:** PostgreSQL en Railway (`DATABASE_URL` referenciada desde el servicio Postgres).
-- **Variables:** definir en el dashboard de Railway (nunca en Git). Referencia en `backend/.env.example`.
+- **Database:** PostgreSQL on Railway (`DATABASE_URL` referenced from the Postgres service).
+- **Variables:** set them in the Railway dashboard (never in Git). Reference in `backend/.env.example`.
 
-Valores clave en producción (dashboard Railway; Polaris las lee como variables de entorno):
+Key production values (Railway dashboard; Polaris reads them as environment variables):
 
 ```
-DJANGO_SECRET_KEY=<secreto>
+DJANGO_SECRET_KEY=<secret>
 DEBUG=False
 ALLOWED_HOSTS=anchor.versotek.io,.up.railway.app
 CSRF_TRUSTED_ORIGINS=https://anchor.versotek.io
@@ -308,27 +306,27 @@ ACTIVE_SEPS=sep-1,sep-10
 HOST_URL=https://anchor.versotek.io
 LOCAL_MODE=0
 ENABLE_SEP_0023=1
-SIGNING_SEED=<seed-testnet>
-SERVER_JWT_KEY=<secreto-jwt>
+SIGNING_SEED=<testnet-seed>
+SERVER_JWT_KEY=<jwt-secret>
 SEP10_HOME_DOMAINS=versotek.io,anchor.versotek.io
 STELLAR_NETWORK_PASSPHRASE=Test SDF Network ; September 2015
 ```
 
-La cuenta Stellar de `SIGNING_SEED` debe tener **home domain** `anchor.versotek.io` en testnet.
+The Stellar account behind `SIGNING_SEED` must have **home domain** `anchor.versotek.io` on testnet.
 
-## Git y ramas
+## Git and branching
 
 ```powershell
 git checkout main
 git pull origin main
 ```
 
-Flujo recomendado: rama feature → **pull request** → merge a `main` → deploy en Railway.
+Recommended flow: feature branch → **pull request** → merge to `main` → deploy on Railway.
 
-## Documentación Polaris
+## Polaris documentation
 
 - https://django-polaris.readthedocs.io/en/stable/
 
-## Licencia
+## License
 
-Propietario - VERSO / versotek.io
+Proprietary — VERSO / versotek.io
