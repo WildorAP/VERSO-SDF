@@ -11,6 +11,24 @@ jobs:
       run:
         working-directory: backend
 
+    # PostgreSQL matches production (Railway). SQLite does not support
+    # SELECT ... FOR UPDATE, so the row-locking test in
+    # test_deposit_concurrency.py is meaningless (and flaky) on SQLite.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: verso
+          POSTGRES_PASSWORD: verso
+          POSTGRES_DB: verso_anchor
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -36,6 +54,8 @@ jobs:
 
       - name: Run Django tests
         env:
+          DEBUG: "False"
+          DATABASE_URL: "postgres://verso:verso@localhost:5432/verso_anchor"
           ACTIVE_SEPS: "sep-1,sep-10"
           HOST_URL: "http://localhost:8000"
           LOCAL_MODE: "1"
