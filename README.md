@@ -29,28 +29,89 @@ See "Architecture note" below for the documented deviations (Polaris instead of 
 
 ### Deliverable 2 — SEP-10: Wallet authentication connected to VERSO's compliance system
 
-**Covered in its authentication component.** The SEP-10 authentication flow was verified end-to-end against the live testnet deployment using the Stellar CLI, following the procedure officially documented by Stellar ([developers.stellar.org — Testing Your Configuration](https://developers.stellar.org/docs/tools/cli)):
+**Covered in its authentication component.** The SEP-10 authentication flow was verified end-to-end against the live testnet deployment using the Stellar CLI, following the procedure officially documented by Stellar ([developers.stellar.org — Testing Your Configuration](https://developers.stellar.org/docs/tools/cli)).
+
+#### Reproducing the verification
+
+Anyone can reproduce this against the live anchor with their own testnet account. Commands below are PowerShell; the equivalent works on any shell with `curl` and `jq`.
+
+**Prerequisites** — verify both tools are available:
 
 ```powershell
-# 1. Request the challenge
+stellar --version
+jq --version
+```
+
+**Step 1 — Define the client account.** Any funded testnet account works:
+
+```powershell
+$ACCOUNT_ID = "GCXGLWL7GEPUDCCZABQVLHTZLDWWXPTURGXODJ6JF6BVJSO4KWU45IFG"
+```
+
+**Step 2 — Define the secret key for that account.** Alternatively, resolve it from a Stellar CLI identity (`stellar keys secret <name>`) so the secret never appears on screen:
+
+```powershell
+$SECRET_SEED = "S..."
+```
+
+**Step 3 — Request the challenge.** The anchor returns an unsigned transaction plus the network passphrase:
+
+```powershell
 $CHALLENGE_RESPONSE = curl.exe -s "https://anchor.versotek.io/auth?account=$ACCOUNT_ID"
+$CHALLENGE_RESPONSE
+```
+
+Expected: `{"transaction":"AAAAAg...","network_passphrase":"Test SDF Network ; September 2015"}`
+
+**Step 4 — Extract the challenge XDR:**
+
+```powershell
 $CHALLENGE_XDR = $CHALLENGE_RESPONSE | jq -r '.transaction'
+$CHALLENGE_XDR
+```
 
-# 2. Sign the challenge with the client wallet (testnet)
+Expected: a base64 string starting with `AAAAAg...`. The challenge is a `sequence = 0` transaction (never submitted to the network) carrying `manage_data` operations with the home domain and a random nonce. It can be inspected with `stellar xdr decode --type TransactionEnvelope --output json-formatted`, or in [Stellar Lab → View XDR](https://lab.stellar.org).
+
+**Step 5 — Sign the challenge with the client wallet:**
+
+```powershell
 $SIGNED_CHALLENGE_XDR = ($CHALLENGE_XDR | stellar tx sign --sign-with-key $SECRET_SEED --network testnet 2>&1) | Select-Object -Last 1
+$SIGNED_CHALLENGE_XDR
+```
 
-# 3. Submit the signature and receive the JWT
+Expected: a longer XDR than step 4 — it now carries the client signature.
+
+**Step 6 — Build the request body.** `-Encoding ascii` is required: PowerShell's `utf8` writes a BOM that breaks JSON parsing server-side:
+
+```powershell
 $body = @{ transaction = $SIGNED_CHALLENGE_XDR } | ConvertTo-Json -Compress
 Set-Content -Path "$env:TEMP\sep10_body.json" -Value $body -Encoding ascii -NoNewline
+```
+
+**Step 7 — Submit the signature and receive the JWT:**
+
+```powershell
 curl.exe -X POST "https://anchor.versotek.io/auth" -H "Content-Type: application/json" -d "@$env:TEMP\sep10_body.json"
 ```
 
-Result obtained — a valid JWT, issued by the VERSO anchor for the account that signed the challenge:
+> Challenges have a short validity window. If steps 3–7 take too long, the server rejects the challenge as expired — simply restart from step 3.
+
+#### Result
+
+A valid JWT, issued by the VERSO anchor for the account that signed the challenge:
 
 ```json
 {
   "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL2FuY2hvci52ZXJzb3Rlay5pby9hdXRoIiwic3ViIjoiR0NYR0xXTDdHRVBVRENDWkFCUVZMSFRaTERXV1hQVFVSR1hPREo2SkY2QlZKU080S1dVNDVJRkciLCJpYXQiOjE3ODY2Njc0NTMsImV4cCI6MTc4Njc1Mzg1MywianRpIjoiMDYxZTUxNDYzNjZiMjRmYjM1OTMxNmZkYmNmNThmMGRiMTFkNjJhNjFlNGNlYzBjMDI3ZjY0Y2ZmNDgxODViMiIsImNsaWVudF9kb21haW4iOm51bGx9..."
 }
+```
+
+The token payload can be decoded to verify its claims:
+
+```powershell
+$AUTH_RESPONSE = curl.exe -s -X POST "https://anchor.versotek.io/auth" -H "Content-Type: application/json" -d "@$env:TEMP\sep10_body.json"
+$TOKEN = $AUTH_RESPONSE | jq -r '.token'
+$p = $TOKEN.Split('.')[1].Replace('-','+').Replace('_','/'); switch ($p.Length % 4) { 2 { $p += '==' } 3 { $p += '=' } }; [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($p))
 ```
 
 The decoded payload confirms `iss: https://anchor.versotek.io/auth` and a `sub` matching the signing account, with correct issued-at/expiration timestamps — validating the full cycle: challenge request → signature by the client wallet → signature verification by the backend → JWT issuance.
