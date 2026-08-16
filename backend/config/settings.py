@@ -10,7 +10,11 @@ import environ
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 env = environ.Env(
-    DEBUG=(bool, True),
+    # Fail-safe: si la variable DEBUG falta o no parsea, se asume producción.
+    # Con DEBUG=True los tracebacks exponen las variables de entorno
+    # (SIGNING_SEED, SERVER_JWT_KEY) y se desactivan las cookies seguras.
+    # Para desarrollo local, definir DEBUG=True en backend/.env (ver .env.example).
+    DEBUG=(bool, False),
     ALLOWED_HOSTS=(list, ["localhost", "127.0.0.1"]),
     CSRF_TRUSTED_ORIGINS=(list, []),
 )
