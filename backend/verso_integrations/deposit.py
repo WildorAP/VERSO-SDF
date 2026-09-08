@@ -1,12 +1,12 @@
 """
-Deposit integration stubs for SEP-24 on-ramp (Tranche 2).
+Deposit helpers for SEP-24 on-ramp (PEN → USDC).
 
-Implement DepositIntegration subclass and register in apps.py.
+VersoDepositIntegration lives in verso_integrations.sep24.integration.
 """
 
 from decimal import Decimal
 
-# T2: from polaris.integrations import DepositIntegration
+from django.conf import settings
 
 USDC_DECIMALS = Decimal("0.0000001")
 
@@ -24,9 +24,11 @@ def get_cci_deposit_instructions(
     amount_usdc: float,
 ) -> dict:
     """Return CCI/CCE bank transfer instructions for the user."""
+    bank_name = getattr(settings, "VERSO_CCI_BANK_NAME", "BCP")
+    account_number = getattr(settings, "VERSO_CCI_ACCOUNT_NUMBER", "XXXXXXXX")
     return {
-        "bank_name": "BCP",
-        "account_number": "XXXXXXXX",
+        "bank_name": bank_name,
+        "account_number": account_number,
         "reference": f"TXN-{client_id}",
         "amount_pen": amount_pen,
         "tipo_cambio_pen_per_usdc": tipo_cambio,

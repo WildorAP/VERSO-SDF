@@ -46,6 +46,47 @@ def build_root_payload() -> dict:
         f"{explorer}/account/{anchor_account}" if anchor_account else explorer
     )
 
+    endpoints = [
+        {
+            "label": "stellar.toml",
+            "sep": "SEP-1",
+            "path": "/.well-known/stellar.toml",
+            "url": f"{host}/.well-known/stellar.toml",
+        },
+        {
+            "label": "Wallet auth",
+            "sep": "SEP-10",
+            "path": "/auth",
+            "url": f"{host}/auth",
+        },
+    ]
+    if "sep-38" in _active_seps():
+        endpoints.append(
+            {
+                "label": "Quote server (PEN & USD / USDC)",
+                "sep": "SEP-38",
+                "path": "/sep38",
+                "url": f"{host}/sep38",
+            }
+        )
+    if "sep-24" in _active_seps():
+        endpoints.append(
+            {
+                "label": "Interactive deposit (PEN → USDC)",
+                "sep": "SEP-24",
+                "path": "/sep24",
+                "url": f"{host}/sep24",
+            }
+        )
+    endpoints.append(
+        {
+            "label": "Admin (operador)",
+            "sep": None,
+            "path": "/admin",
+            "url": f"{host}/admin",
+        }
+    )
+
     return {
         "status": "ok",
         "service": "verso-anchor",
@@ -77,26 +118,7 @@ def build_root_payload() -> dict:
                 "scope": "producción mainnet",
             },
         ],
-        "endpoints": [
-            {
-                "label": "stellar.toml",
-                "sep": "SEP-1",
-                "path": "/.well-known/stellar.toml",
-                "url": f"{host}/.well-known/stellar.toml",
-            },
-            {
-                "label": "Wallet auth",
-                "sep": "SEP-10",
-                "path": "/auth",
-                "url": f"{host}/auth",
-            },
-            {
-                "label": "Admin (operador)",
-                "sep": None,
-                "path": "/admin",
-                "url": f"{host}/admin",
-            },
-        ],
+        "endpoints": endpoints,
         "links": {
             "org": "https://versotek.io",
             "polaris_docs": "https://django-polaris.readthedocs.io/en/stable/",

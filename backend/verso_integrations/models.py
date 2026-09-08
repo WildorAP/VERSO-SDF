@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.utils import timezone
 from stellar_sdk import StrKey
 
 from verso_integrations.deposit import compute_amount_usdc
@@ -10,6 +11,49 @@ from verso_integrations.deposit import compute_amount_usdc
 def validate_stellar_public_key(value: str) -> None:
     if not StrKey.is_valid_ed25519_public_key(value):
         raise ValidationError("Invalid Stellar public key (expected G...).")
+
+
+class Sep24DepositMeta(models.Model):
+    """PEN on-ramp metadata linked to a Polaris SEP-24 Transaction."""
+
+    transaction = models.OneToOneField(
+        "polaris.Transaction",
+        on_delete=models.CASCADE,
+        related_name="verso_deposit_meta",
+    )
+    amount_pen = models.DecimalField(max_digits=18, decimal_places=2)
+    tipo_cambio = models.DecimalField(max_digits=12, decimal_places=4)
+    amount_usdc = models.DecimalField(max_digits=18, decimal_places=7)
+    sell_asset = models.TextField(
+        help_text="SEP-38 asset id for fiat sold by user (iso4217:PEN).",
+    )
+    buy_asset = models.TextField(
+        help_text="SEP-38 asset id received on-chain (stellar:USDC:...).",
+    )
+    bank_instructions = models.JSONField(default=dict, blank=True)
+    fiat_confirmed_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "SEP-24 deposit (PEN on-ramp)"
+        verbose_name_plural = "SEP-24 deposits (PEN on-ramp)"
+
+    def __str__(self) -> str:
+        return (
+            f"SEP-24 {self.transaction_id} — {self.amount_pen} PEN "
+            f"→ {self.amount_usdc} USDC"
+        )
+
+    def mark_fiat_confirmed(self) -> None:
+        from polaris.models import Transaction
+
+        self.fiat_confirmed_at = timezone.now()
+        self.save(update_fields=["fiat_confirmed_at", "updated_at"])
+        tx = self.transaction
+        if tx.status == Transaction.STATUS.incomplete:
+            tx.status = Transaction.STATUS.pending_user_transfer_start
+            tx.save(update_fields=["status"])
 
 
 class FiatDeposit(models.Model):

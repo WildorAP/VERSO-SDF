@@ -16,6 +16,7 @@ class RootViewTests(TestCase):
         self.assertContains(response, "Qué viene en cada tranche")
         self.assertContains(response, "T1")
 
+    @patch.dict("os.environ", {"ACTIVE_SEPS": "sep-1,sep-10"})
     def test_root_returns_health_json_with_format_param(self):
         response = self.client.get("/?format=json")
 
@@ -31,6 +32,15 @@ class RootViewTests(TestCase):
         self.assertEqual(data["tranches"][0]["status"], "live")
         self.assertEqual(data["tranches"][1]["status"], "planned")
         self.assertEqual(len(data["endpoints"]), 3)
+
+    @patch.dict("os.environ", {"ACTIVE_SEPS": "sep-1,sep-10,sep-38", "HOST_URL": "http://localhost:8000"})
+    def test_root_lists_sep38_endpoint_when_active(self):
+        response = self.client.get("/?format=json")
+        data = json.loads(response.content)
+
+        sep38 = [item for item in data["endpoints"] if item.get("sep") == "SEP-38"]
+        self.assertEqual(len(sep38), 1)
+        self.assertEqual(sep38[0]["url"], "http://localhost:8000/sep38")
 
     def test_root_returns_json_when_accept_header_requests_it(self):
         response = self.client.get("/", HTTP_ACCEPT="application/json")

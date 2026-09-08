@@ -10,5 +10,13 @@ class VersoIntegrationsConfig(AppConfig):
         from polaris.integrations import register_integrations
 
         from .sep1 import return_toml_contents
+        from .sep24.integration import VersoDepositIntegration
+        from .sep38 import VersoQuoteIntegration
+        from .rails import VersoRailsIntegration
 
-        register_integrations(toml=return_toml_contents)
+        register_integrations(
+            toml=return_toml_contents,
+            quote=VersoQuoteIntegration(),
+            deposit=VersoDepositIntegration(),
+            rails=VersoRailsIntegration(),
+        )

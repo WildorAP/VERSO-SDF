@@ -56,6 +56,7 @@ MIDDLEWARE = [
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
+    "polaris.middleware.TimezoneMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
@@ -114,9 +115,35 @@ STORAGES = {
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+# SEP-24 webview widgets (Polaris ships overrides under polaris/templates/django/forms/).
+# Use DjangoTemplates — TemplatesSetting breaks admin login (missing error templates).
+FORM_RENDERER = "django.forms.renderers.DjangoTemplates"
+
 # VERSO core API (BASE_DE_CLIENTES) — T1+
 VERSO_CORE_API_URL = env("VERSO_CORE_API_URL", default="http://localhost:9000")
 VERSO_CORE_API_KEY = env("VERSO_CORE_API_KEY", default="")
+
+# Firm SEP-38 quote TTL (seconds). Client expire_after cannot exceed this window.
+VERSO_QUOTE_TTL_SECONDS = env.int("VERSO_QUOTE_TTL_SECONDS", default=900)
+
+# SEP-24 CCI deposit instructions (Etapa 3+).
+VERSO_CCI_BANK_NAME = env("VERSO_CCI_BANK_NAME", default="BCP")
+VERSO_CCI_ACCOUNT_NUMBER = env("VERSO_CCI_ACCOUNT_NUMBER", default="XXXXXXXX")
+
+# Test-only: auto-confirm PEN after webview form (never enable in production).
+VERSO_MOCK_AUTO_CONFIRM_FIAT = env.bool("VERSO_MOCK_AUTO_CONFIRM_FIAT", default=False)
+
+# Redis — SEP-24 session/cache (T2). Falls back to DB sessions when unset.
+REDIS_URL = env("REDIS_URL", default="")
+if REDIS_URL:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.redis.RedisCache",
+            "LOCATION": REDIS_URL,
+        }
+    }
+    SESSION_ENGINE = "django.contrib.sessions.backends.cache"
+    SESSION_CACHE_ALIAS = "default"
 
 # Cierra la sesión del admin tras 10 minutos de inactividad.
 SESSION_COOKIE_AGE = 600  # segundos

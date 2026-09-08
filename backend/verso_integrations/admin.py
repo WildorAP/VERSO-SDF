@@ -3,7 +3,7 @@ from django.utils import timezone
 from django.db import transaction
 
 from verso_integrations.deposit import get_cci_deposit_instructions
-from verso_integrations.models import FiatDeposit
+from verso_integrations.models import FiatDeposit, Sep24DepositMeta
 from verso_integrations.stellar_payout import StellarPayoutError, disburse_usdc as send_usdc_on_chain
 
 
@@ -134,5 +134,53 @@ class FiatDepositAdmin(admin.ModelAdmin):
             self.message_user(
                 request,
                 f"Deposit #{final_deposit.pk}: sent {final_deposit.amount_usdc} USDC — tx {tx_hash}",
+                level=messages.SUCCESS,
+            )
+
+
+@admin.register(Sep24DepositMeta)
+class Sep24DepositMetaAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "transaction",
+        "amount_pen",
+        "tipo_cambio",
+        "amount_usdc",
+        "fiat_confirmed_at",
+        "created_at",
+    )
+    list_filter = ("fiat_confirmed_at",)
+    search_fields = ("transaction__id", "transaction__stellar_account")
+    readonly_fields = (
+        "transaction",
+        "amount_pen",
+        "tipo_cambio",
+        "amount_usdc",
+        "sell_asset",
+        "buy_asset",
+        "bank_instructions",
+        "fiat_confirmed_at",
+        "created_at",
+        "updated_at",
+    )
+    actions = ("mark_fiat_received",)
+
+    @admin.action(description="Mark PEN received (enables Polaris rails poll)")
+    def mark_fiat_received(self, request, queryset):
+        updated = 0
+        for meta in queryset:
+            if meta.fiat_confirmed_at is not None:
+                self.message_user(
+                    request,
+                    f"SEP-24 meta #{meta.pk}: skipped (already confirmed).",
+                    level=messages.WARNING,
+                )
+                continue
+            meta.mark_fiat_confirmed()
+            updated += 1
+        if updated:
+            self.message_user(
+                request,
+                f"{updated} SEP-24 deposit(s) marked as PEN received.",
                 level=messages.SUCCESS,
             )
