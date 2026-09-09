@@ -29,29 +29,33 @@ class PriceForPairTests(SimpleTestCase):
         self.pen = FakeAsset(pen_asset_identification(), 2)
         self.usd = FakeAsset(usd_asset_identification(), 2)
         self.usdc = FakeAsset(usdc_asset_identification(), 7)
-        self.pen_tipo = Decimal("3.7500")
-        self.usd_tipo = Decimal("1.0000")
+        # rate_venta y rate_compra deliberadamente distintos, para que el test
+        # confirme que se usa el lado correcto (no solo "algún número").
+        self.pen_rate = FiatUsdcRate(rate_venta=Decimal("3.7500"), rate_compra=Decimal("3.7000"))
+        self.usd_rate = FiatUsdcRate(rate_venta=Decimal("1.0010"), rate_compra=Decimal("0.9990"))
 
-    def test_pen_to_usdc_uses_tipo_cambio(self):
-        price = price_for_pair(self.pen, self.usdc, self.pen_tipo)
+    def test_pen_to_usdc_uses_rate_venta(self):
+        # Deposito (on-ramp): VERSO vende USDC -> usa rate_venta.
+        price = price_for_pair(self.pen, self.usdc, self.pen_rate)
         self.assertEqual(price, Decimal("3.75"))
 
-    def test_usdc_to_pen_inverts_tipo_cambio(self):
-        price = price_for_pair(self.usdc, self.pen, self.pen_tipo)
-        self.assertEqual(price, Decimal("0.2666667"))
+    def test_usdc_to_pen_uses_inverted_rate_compra(self):
+        # Retiro (off-ramp): VERSO compra USDC -> usa rate_compra (invertido).
+        price = price_for_pair(self.usdc, self.pen, self.pen_rate)
+        self.assertEqual(price, Decimal("0.2702703"))
 
-    def test_usd_to_usdc_uses_tipo_cambio(self):
-        price = price_for_pair(self.usd, self.usdc, self.usd_tipo)
+    def test_usd_to_usdc_uses_rate_venta(self):
+        price = price_for_pair(self.usd, self.usdc, self.usd_rate)
         self.assertEqual(price, Decimal("1.00"))
 
-    def test_usdc_to_usd_inverts_tipo_cambio(self):
-        price = price_for_pair(self.usdc, self.usd, self.usd_tipo)
-        self.assertEqual(price, Decimal("1.0000000"))
+    def test_usdc_to_usd_uses_inverted_rate_compra(self):
+        price = price_for_pair(self.usdc, self.usd, self.usd_rate)
+        self.assertEqual(price, Decimal("1.0010010"))
 
     def test_unsupported_pair_raises(self):
         other = FakeAsset("iso4217:EUR", 2)
         with self.assertRaises(ValueError):
-            price_for_pair(self.pen, other, self.pen_tipo)
+            price_for_pair(self.pen, other, self.pen_rate)
 
 
 @override_settings(VERSO_QUOTE_TTL_SECONDS=600)
@@ -86,7 +90,9 @@ class VersoQuoteIntegrationTests(TestCase):
 
     @patch("verso_integrations.sep38.get_pen_usdc_rate")
     def test_get_price_fetches_live_pen_rate(self, mock_pen_rate):
-        mock_pen_rate.return_value = FiatUsdcRate(tipo_cambio=Decimal("3.8000"))
+        mock_pen_rate.return_value = FiatUsdcRate(
+            rate_venta=Decimal("3.8000"), rate_compra=Decimal("3.7500")
+        )
 
         price = self.integration.get_price(
             token=MagicMock(),
@@ -100,7 +106,9 @@ class VersoQuoteIntegrationTests(TestCase):
 
     @patch("verso_integrations.sep38.get_usd_usdc_rate")
     def test_get_price_fetches_live_usd_rate(self, mock_usd_rate):
-        mock_usd_rate.return_value = FiatUsdcRate(tipo_cambio=Decimal("1.0010"))
+        mock_usd_rate.return_value = FiatUsdcRate(
+            rate_venta=Decimal("1.0010"), rate_compra=Decimal("0.9990")
+        )
 
         price = self.integration.get_price(
             token=MagicMock(),
@@ -127,7 +135,9 @@ class VersoQuoteIntegrationTests(TestCase):
     def test_post_quote_sets_price_and_expiration(self, mock_rate):
         from polaris.models import DeliveryMethod
 
-        mock_rate.return_value = FiatUsdcRate(tipo_cambio=Decimal("3.7500"))
+        mock_rate.return_value = FiatUsdcRate(
+            rate_venta=Decimal("3.7500"), rate_compra=Decimal("3.7000")
+        )
         sell_method = DeliveryMethod.objects.get(
             name="bank_transfer_cci_cce",
             type=DeliveryMethod.TYPE.sell,

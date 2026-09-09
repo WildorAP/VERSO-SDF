@@ -25,8 +25,9 @@ from verso_integrations.sep1 import USDC_ISSUER_TESTNET
 
 class ParsePenUsdcResponseTests(SimpleTestCase):
     def test_parses_required_fields(self):
-        rate = parse_pen_usdc_response({"tipo_cambio": "3.7500"})
-        self.assertEqual(rate.tipo_cambio, Decimal("3.7500"))
+        rate = parse_pen_usdc_response({"rate_venta": "3.5000", "rate_compra": "3.4000"})
+        self.assertEqual(rate.rate_venta, Decimal("3.5000"))
+        self.assertEqual(rate.rate_compra, Decimal("3.4000"))
         self.assertIsInstance(rate, FiatUsdcRate)
         self.assertIsNone(rate.updated_at)
         self.assertIsNone(rate.source)
@@ -34,26 +35,38 @@ class ParsePenUsdcResponseTests(SimpleTestCase):
     def test_parses_optional_fields(self):
         rate = parse_pen_usdc_response(
             {
-                "tipo_cambio": 3.75,
+                "rate_venta": 3.5,
+                "rate_compra": 3.4,
                 "updated_at": "2026-09-07T17:00:00Z",
-                "source": "pricing_engine",
+                "source": "platea_exchangerate",
             }
         )
-        self.assertEqual(rate.tipo_cambio, Decimal("3.75"))
-        self.assertEqual(rate.source, "pricing_engine")
+        self.assertEqual(rate.rate_venta, Decimal("3.5"))
+        self.assertEqual(rate.rate_compra, Decimal("3.4"))
+        self.assertEqual(rate.source, "platea_exchangerate")
         self.assertIsNotNone(rate.updated_at)
 
-    def test_rejects_missing_tipo_cambio(self):
+    def test_rejects_missing_rate_venta(self):
         with self.assertRaises(RatesError):
-            parse_pen_usdc_response({})
+            parse_pen_usdc_response({"rate_compra": "3.4000"})
 
-    def test_rejects_non_positive_tipo_cambio(self):
+    def test_rejects_missing_rate_compra(self):
         with self.assertRaises(RatesError):
-            parse_pen_usdc_response({"tipo_cambio": "0"})
+            parse_pen_usdc_response({"rate_venta": "3.5000"})
+
+    def test_rejects_non_positive_rate_venta(self):
+        with self.assertRaises(RatesError):
+            parse_pen_usdc_response({"rate_venta": "0", "rate_compra": "3.4000"})
+
+    def test_rejects_non_positive_rate_compra(self):
+        with self.assertRaises(RatesError):
+            parse_pen_usdc_response({"rate_venta": "3.5000", "rate_compra": "0"})
 
     def test_rejects_invalid_updated_at(self):
         with self.assertRaises(RatesError):
-            parse_pen_usdc_response({"tipo_cambio": "3.75", "updated_at": "not-a-date"})
+            parse_pen_usdc_response(
+                {"rate_venta": "3.5000", "rate_compra": "3.4000", "updated_at": "not-a-date"}
+            )
 
 
 @override_settings(
@@ -65,7 +78,8 @@ class GetPenUsdcRateTests(SimpleTestCase):
     def test_fetches_and_parses_core_response(self, mock_get):
         mock_response = MagicMock()
         mock_response.json.return_value = {
-            "tipo_cambio": "3.8100",
+            "rate_venta": "3.8100",
+            "rate_compra": "3.7900",
             "updated_at": "2026-09-07T17:00:00Z",
         }
         mock_response.raise_for_status.return_value = None
@@ -74,7 +88,8 @@ class GetPenUsdcRateTests(SimpleTestCase):
         rate = get_pen_usdc_rate()
 
         self.assertIsInstance(rate, PenUsdcRate)
-        self.assertEqual(rate.tipo_cambio, Decimal("3.8100"))
+        self.assertEqual(rate.rate_venta, Decimal("3.8100"))
+        self.assertEqual(rate.rate_compra, Decimal("3.7900"))
         mock_get.assert_called_once_with(
             "http://core.test/internal/rates/pen-usdc",
             headers={"Authorization": "Bearer test-key"},
@@ -101,13 +116,14 @@ class GetUsdUsdcRateTests(SimpleTestCase):
     @patch("verso_integrations.rates.requests.get")
     def test_fetches_usd_usdc_from_core(self, mock_get):
         mock_response = MagicMock()
-        mock_response.json.return_value = {"tipo_cambio": "1.0000"}
+        mock_response.json.return_value = {"rate_venta": "1.0050", "rate_compra": "0.9950"}
         mock_response.raise_for_status.return_value = None
         mock_get.return_value = mock_response
 
         rate = get_usd_usdc_rate()
 
-        self.assertEqual(rate.tipo_cambio, Decimal("1.0000"))
+        self.assertEqual(rate.rate_venta, Decimal("1.0050"))
+        self.assertEqual(rate.rate_compra, Decimal("0.9950"))
         mock_get.assert_called_once_with(
             "http://core.test/internal/rates/usd-usdc",
             headers={"Authorization": "Bearer test-key"},

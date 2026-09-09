@@ -73,7 +73,9 @@ class VersoDepositIntegrationTests(TestCase):
 
     @patch("verso_integrations.sep24.integration.get_pen_usdc_rate")
     def test_after_form_validation_creates_quote_and_meta(self, mock_rate):
-        mock_rate.return_value = FiatUsdcRate(tipo_cambio=Decimal("3.7500"))
+        mock_rate.return_value = FiatUsdcRate(
+            rate_venta=Decimal("3.7500"), rate_compra=Decimal("3.7000")
+        )
         form = PenDepositForm({"amount_pen": "100.00"})
         self.assertTrue(form.is_valid())
 
@@ -111,7 +113,9 @@ class VersoDepositIntegrationTests(TestCase):
 
     @patch("verso_integrations.sep24.integration.get_pen_usdc_rate")
     def test_content_for_template_more_info_includes_bank_guidance(self, mock_rate):
-        mock_rate.return_value = FiatUsdcRate(tipo_cambio=Decimal("4.0000"))
+        mock_rate.return_value = FiatUsdcRate(
+            rate_venta=Decimal("4.0000"), rate_compra=Decimal("3.9500")
+        )
         form = PenDepositForm({"amount_pen": "50.00"})
         self.assertTrue(form.is_valid())
         self.integration.after_form_validation(self.request, form, self.transaction)
@@ -144,7 +148,9 @@ class VersoDepositIntegrationAutoConfirmTests(TestCase):
 
     @patch("verso_integrations.sep24.integration.get_pen_usdc_rate")
     def test_auto_confirm_sets_fiat_confirmed_at(self, mock_rate):
-        mock_rate.return_value = FiatUsdcRate(tipo_cambio=Decimal("3.7500"))
+        mock_rate.return_value = FiatUsdcRate(
+            rate_venta=Decimal("3.7500"), rate_compra=Decimal("3.7000")
+        )
         form = PenDepositForm({"amount_pen": "10.00"})
         self.assertTrue(form.is_valid())
         self.integration.after_form_validation(MagicMock(), form, self.transaction)

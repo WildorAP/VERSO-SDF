@@ -78,7 +78,7 @@ class VersoDepositIntegration(DepositIntegration):
 
         rate = get_pen_usdc_rate()
         amount_pen = form.cleaned_data["amount_pen"].quantize(Decimal("0.01"))
-        amount_usdc = compute_amount_usdc(amount_pen, rate.tipo_cambio)
+        amount_usdc = compute_amount_usdc(amount_pen, rate.rate_venta)
 
         pen_id = pen_asset_identification()
         usdc_id = usdc_asset_identification()
@@ -96,21 +96,21 @@ class VersoDepositIntegration(DepositIntegration):
             buy_asset=usdc_id,
             sell_amount=amount_pen,
             buy_amount=amount_usdc,
-            price=rate.tipo_cambio.quantize(Decimal("0.01")),
+            price=rate.rate_venta.quantize(Decimal("0.01")),
             sell_delivery_method=sell_method,
         )
 
         instructions = get_cci_deposit_instructions(
             float(amount_pen),
             str(transaction.id),
-            tipo_cambio=float(rate.tipo_cambio),
+            tipo_cambio=float(rate.rate_venta),
             amount_usdc=float(amount_usdc),
         )
 
         Sep24DepositMeta.objects.create(
             transaction=transaction,
             amount_pen=amount_pen,
-            tipo_cambio=rate.tipo_cambio,
+            tipo_cambio=rate.rate_venta,
             amount_usdc=amount_usdc,
             sell_asset=pen_id,
             buy_asset=usdc_id,
