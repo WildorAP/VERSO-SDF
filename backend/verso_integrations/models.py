@@ -76,7 +76,9 @@ class FiatDeposit(models.Model):
     tipo_cambio = models.DecimalField(
         max_digits=12,
         decimal_places=4,
-        help_text="Tipo de cambio: PEN por 1 USDC (ej. 3.7500).",
+        editable=False,
+        default=Decimal("0"),
+        help_text="Tipo de cambio: PEN por 1 USDC — obtenido automáticamente de VERSO (rate_venta) al crear el depósito.",
     )
     amount_usdc = models.DecimalField(
         max_digits=18,
@@ -114,10 +116,19 @@ class FiatDeposit(models.Model):
 
     def clean(self) -> None:
         super().clean()
-        if self.amount_pen <= Decimal("0"):
+        if self.amount_pen is not None and self.amount_pen <= Decimal("0"):
             raise ValidationError({"amount_pen": "Must be greater than zero."})
-        if self.tipo_cambio <= Decimal("0"):
-            raise ValidationError({"tipo_cambio": "Must be greater than zero."})
+
+        if self._state.adding:
+            from verso_integrations.rates import RatesError, get_pen_usdc_rate
+
+            try:
+                rate = get_pen_usdc_rate()
+            except RatesError as exc:
+                raise ValidationError(
+                    f"No se pudo obtener el tipo de cambio en vivo de VERSO: {exc}"
+                ) from exc
+            self.tipo_cambio = rate.rate_venta
 
     def save(self, *args, **kwargs):
         self.amount_usdc = compute_amount_usdc(self.amount_pen, self.tipo_cambio)

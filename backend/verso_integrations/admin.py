@@ -22,6 +22,7 @@ class FiatDepositAdmin(admin.ModelAdmin):
     list_filter = ("status",)
     search_fields = ("stellar_account", "stellar_tx_hash")
     readonly_fields = (
+        "tipo_cambio",
         "amount_usdc",
         "status",
         "bank_instructions",
