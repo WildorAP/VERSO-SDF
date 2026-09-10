@@ -106,9 +106,9 @@ def build_root_payload() -> dict:
             {
                 "id": "T2",
                 "seps": ["SEP-24", "SEP-38"],
-                "status": "planned",
-                "status_label": "Planificado",
-                "scope": "webview on-ramp, cotizaciones PEN/USDC, KYC (DIDIT)",
+                "status": "in_progress",
+                "status_label": "Etapa 3 MVP (local/testnet)",
+                "scope": "SEP-38 cotizaciones, webview PEN→USDC, confirmación fiat mock (admin); KYC Etapa 4",
             },
             {
                 "id": "T3",

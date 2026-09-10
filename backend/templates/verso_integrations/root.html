@@ -287,8 +287,8 @@
       <h1>Anchor en {{ network }}</h1>
       <p class="lede">
         Este es nuestro punto de anclaje Stellar en <strong>{{ home_domain }}</strong>.
-        Lo usamos para SEP-1 y SEP-10 en testnet — no es la app donde el usuario final opera
-        (eso llega en T2 con SEP-24).
+        Lo usamos para SEP-1, SEP-10{% if active_seps %} y los SEP activos en este entorno{% endif %}
+        en testnet{% if "sep-24" in active_seps %} — incluye webview on-ramp PEN→USDC (Etapa 3 MVP){% else %} — el on-ramp SEP-24 se habilita en T2{% endif %}.
       </p>
       <div class="status-row">
         <span class="live">En línea</span>
