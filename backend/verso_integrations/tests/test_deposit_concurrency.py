@@ -5,8 +5,9 @@ from unittest.mock import patch
 from django.contrib import messages
 from django.contrib.admin.sites import AdminSite
 from django.contrib.auth import get_user_model
-from django.test import RequestFactory, TransactionTestCase
 from django.contrib.messages.storage.fallback import FallbackStorage
+from django.db import connections
+from django.test import RequestFactory, TransactionTestCase
 
 from verso_integrations.admin import FiatDepositAdmin
 from verso_integrations.models import FiatDeposit
@@ -43,12 +44,16 @@ class DisburseConcurrencyTests(TransactionTestCase):
         results = []
 
         def run_disburse():
-            request = _request_with_messages()
-            queryset = FiatDeposit.objects.filter(pk=self.deposit.pk)
-            self.admin.disburse_usdc(request, queryset)
-            results.append(
-                [m.message for m in messages.get_messages(request)]
-            )
+            try:
+                request = _request_with_messages()
+                queryset = FiatDeposit.objects.filter(pk=self.deposit.pk)
+                self.admin.disburse_usdc(request, queryset)
+                results.append(
+                    [m.message for m in messages.get_messages(request)]
+                )
+            finally:
+                # Each thread opens its own DB connection; close before teardown drops test DB.
+                connections.close_all()
 
         thread_a = threading.Thread(target=run_disburse)
         thread_b = threading.Thread(target=run_disburse)
@@ -57,6 +62,7 @@ class DisburseConcurrencyTests(TransactionTestCase):
         thread_b.start()
         thread_a.join()
         thread_b.join()
+        connections.close_all()
 
         # La llamada real a Stellar (mockeada) debe haberse hecho UNA sola vez.
         self.assertEqual(mock_send.call_count, 1)
