@@ -29,6 +29,16 @@ jobs:
           --health-timeout 5s
           --health-retries 5
 
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -56,7 +66,8 @@ jobs:
         env:
           DEBUG: "False"
           DATABASE_URL: "postgres://verso:verso@localhost:5432/verso_anchor"
-          ACTIVE_SEPS: "sep-1,sep-10"
+          REDIS_URL: "redis://localhost:6379/0"
+          ACTIVE_SEPS: "sep-1,sep-10,sep-38,sep-24"
           HOST_URL: "http://localhost:8000"
           LOCAL_MODE: "1"
           SEP10_HOME_DOMAINS: "localhost:8000"
