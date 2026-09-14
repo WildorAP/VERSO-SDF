@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Firma la verificación</title>
+</head>
+<body>
+    <h1>Firma esta transacción para confirmar que controlas tu wallet</h1>
+    {% if error %}<p style="color:red;">{{ error }}</p>{% endif %}
+    <p>Llave pública: <strong>{{ public_key }}</strong></p>
+    <p>Copia este XDR y fírmalo en
+        <a href="https://laboratory.stellar.org/#txsigner?xdr={{ challenge_xdr|urlencode }}&network=test" target="_blank">
+            Stellar Laboratory
+        </a> (Sign Transaction), usando tu llave secreta de testnet:</p>
+    <textarea readonly rows="6" cols="80">{{ challenge_xdr }}</textarea>
+    <form method="post" action="{% url 'accounts:link_stellar_submit' %}">
+        {% csrf_token %}
+        <p><label>XDR firmado:<br>
+            <textarea name="signed_xdr" rows="6" cols="80" required></textarea>
+        </label></p>
+        <button type="submit">Verificar y vincular</button>
+    </form>
+</body>
+</html>

@@ -18,6 +18,7 @@ from django.views.decorators.http import require_http_methods
 from django.contrib.auth.decorators import login_required
 import base64
 import hashlib
+import os
 
 
 from .models import AnchorProfile
@@ -229,3 +230,87 @@ def dashboard(request):
             "stellar_public_key": profile.stellar_public_key if profile else None,
         },
     )
+
+@login_required(login_url="accounts:login")
+def link_stellar_start(request):
+    if request.method == "GET":
+        return render(request, "accounts/link_stellar.html")
+
+    public_key = request.POST.get("public_key", "").strip()
+    if not public_key:
+        return render(
+            request, "accounts/link_stellar.html", {"error": "Ingresa una llave pública."}
+        )
+
+    host_url = os.environ.get("HOST_URL", "http://localhost:8000").rstrip("/")
+    challenge_response = requests.get(
+        f"{host_url}/auth",
+        params={"account": public_key},
+        timeout=10,
+    )
+    if challenge_response.status_code != 200:
+        return render(
+            request,
+            "accounts/link_stellar.html",
+            {"error": "No se pudo generar el reto de verificación."},
+        )
+
+    challenge = challenge_response.json()
+    request.session["pending_stellar_public_key"] = public_key
+    return render(
+        request,
+        "accounts/link_stellar_sign.html",
+        {
+            "public_key": public_key,
+            "challenge_xdr": challenge.get("transaction"),
+            "network_passphrase": challenge.get("network_passphrase"),
+        },
+    )
+
+
+@login_required(login_url="accounts:login")
+def link_stellar_submit(request):
+    public_key = request.session.get("pending_stellar_public_key")
+    if not public_key:
+        return redirect("accounts:link_stellar_start")
+
+    signed_xdr = request.POST.get("signed_xdr", "").strip()
+
+    host_url = os.environ.get("HOST_URL", "http://localhost:8000").rstrip("/")
+    auth_response = requests.post(
+        f"{host_url}/auth",
+        json={"transaction": signed_xdr},
+        timeout=10,
+    )
+    if auth_response.status_code != 200:
+        return render(
+            request,
+            "accounts/link_stellar_sign.html",
+            {
+                "public_key": public_key,
+                "error": "La firma no pudo validarse. Verifica e intenta de nuevo.",
+            },
+        )
+
+    profile = request.user.anchor_profile
+    profile.stellar_public_key = public_key
+    profile.save(update_fields=["stellar_public_key", "updated_at"])
+
+    link_response = requests.post(
+        f"{settings.VERSO_CORE_API_URL}/internal/users/link-stellar-key/",
+        headers={"Authorization": f"Bearer {settings.VERSO_CORE_API_KEY}"},
+        json={"user_id": profile.verso_user_id, "stellar_public_key": public_key},
+        timeout=10,
+    )
+    if link_response.status_code == 409:
+        return render(
+            request,
+            "accounts/link_stellar_sign.html",
+            {
+                "public_key": public_key,
+                "error": "Esa llave ya está vinculada a otra cuenta de VERSO.",
+            },
+        )
+
+    request.session.pop("pending_stellar_public_key", None)
+    return redirect("dashboard")

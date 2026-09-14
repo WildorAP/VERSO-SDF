@@ -8,6 +8,9 @@
     <h1>Sesión iniciada correctamente</h1>
     <p>Usuario: <strong>{{ username }}</strong></p>
     <p>Llave Stellar vinculada: {{ stellar_public_key|default:"Ninguna todavía" }}</p>
+    {% if not stellar_public_key %}
+        <p><a href="{% url 'accounts:link_stellar_start' %}">Vincular wallet Stellar</a></p>
+    {% endif %}
     <a href="{% url 'accounts:logout' %}">Cerrar sesión</a>
 </body>
 </html>
