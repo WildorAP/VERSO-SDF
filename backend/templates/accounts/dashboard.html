@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Mi cuenta — Anchor</title>
+</head>
+<body>
+    <h1>Sesión iniciada correctamente</h1>
+    <p>Usuario: <strong>{{ username }}</strong></p>
+    <p>Llave Stellar vinculada: {{ stellar_public_key|default:"Ninguna todavía" }}</p>
+    <a href="{% url 'accounts:logout' %}">Cerrar sesión</a>
+</body>
+</html>

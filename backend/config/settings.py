@@ -48,6 +48,7 @@ INSTALLED_APPS = [
     "corsheaders",
     "rest_framework",
     "verso_integrations.apps.VersoIntegrationsConfig",
+    "verso_integrations.accounts.apps.AccountsConfig",
     "polaris",
 ]
 
@@ -123,6 +124,14 @@ FORM_RENDERER = "django.forms.renderers.DjangoTemplates"
 VERSO_CORE_API_URL = env("VERSO_CORE_API_URL", default="http://localhost:9000")
 VERSO_CORE_API_KEY = env("VERSO_CORE_API_KEY", default="")
 
+# --- VERSO OAuth2 (SSO) ---
+VERSO_OAUTH_CLIENT_ID = env("VERSO_OAUTH_CLIENT_ID", default="")
+VERSO_OAUTH_CLIENT_SECRET = env("VERSO_OAUTH_CLIENT_SECRET", default="")
+VERSO_OAUTH_AUTHORIZE_URL = env("VERSO_OAUTH_AUTHORIZE_URL", default="")
+VERSO_OAUTH_TOKEN_URL = env("VERSO_OAUTH_TOKEN_URL", default="")
+VERSO_OAUTH_USERINFO_URL = env("VERSO_OAUTH_USERINFO_URL", default="")
+VERSO_OAUTH_REDIRECT_URI = env("VERSO_OAUTH_REDIRECT_URI", default="")
+
 # Firm SEP-38 quote TTL (seconds). Client expire_after cannot exceed this window.
 VERSO_QUOTE_TTL_SECONDS = env.int("VERSO_QUOTE_TTL_SECONDS", default=900)
 
@@ -149,3 +158,4 @@ if REDIS_URL:
 SESSION_COOKIE_AGE = 600  # segundos
 SESSION_SAVE_EVERY_REQUEST = True
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+SESSION_COOKIE_NAME = "anchor_sessionid"

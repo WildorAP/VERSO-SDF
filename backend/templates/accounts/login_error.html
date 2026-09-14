@@ -1,0 +1,12 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Error de inicio de sesión</title>
+</head>
+<body>
+    <h1>No se pudo iniciar sesión</h1>
+    <p>{{ error }}</p>
+    <a href="{% url 'accounts:login' %}">Intentar de nuevo</a>
+</body>
+</html>
