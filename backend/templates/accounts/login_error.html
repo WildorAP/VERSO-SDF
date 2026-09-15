@@ -1,12 +1,10 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <title>Error de inicio de sesión</title>
-</head>
-<body>
+{% extends "accounts/_base.html" %}
+{% load static %}
+{% block title %}No se pudo iniciar sesión · Anchor VERSO{% endblock %}
+
+{% block content_simple %}
+    <img class="rail__logo" src="{% static 'accounts/img/verso-logo.png' %}" alt="VERSO" style="margin-bottom:2.5rem;">
     <h1>No se pudo iniciar sesión</h1>
-    <p>{{ error }}</p>
-    <a href="{% url 'accounts:login' %}">Intentar de nuevo</a>
-</body>
-</html>
+    <div class="error">{{ error }}</div>
+    <p class="foot-link"><a href="{% url 'accounts:login' %}">Intentar de nuevo</a></p>
+{% endblock %}

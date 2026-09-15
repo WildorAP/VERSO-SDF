@@ -1,17 +1,18 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <title>Verifica tu correo</title>
-</head>
-<body>
+{% extends "accounts/_base.html" %}
+{% block title %}Verifica tu correo · Anchor VERSO{% endblock %}
+
+{% block content %}
     <h1>Verifica tu correo</h1>
-    <p>Te enviamos un código de 6 dígitos a <strong>{{ email }}</strong>.</p>
-    {% if error %}<p style="color:red;">{{ error }}</p>{% endif %}
+    <p class="lede">Enviamos un código de 6 dígitos a <strong>{{ email }}</strong>.</p>
+
+    {% if error %}<div class="error">{{ error }}</div>{% endif %}
+
     <form method="post">
         {% csrf_token %}
-        <label>Código: <input type="text" name="codigo" maxlength="6" required></label>
-        <button type="submit">Verificar</button>
+        <div class="field field--code">
+            <label for="id_codigo">Código</label>
+            <input id="id_codigo" type="text" name="codigo" inputmode="numeric" maxlength="6" autocomplete="one-time-code" required>
+        </div>
+        <button type="submit" class="btn">Verificar</button>
     </form>
-</body>
-</html>
+{% endblock %}

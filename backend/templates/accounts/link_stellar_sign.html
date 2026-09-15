@@ -1,24 +1,29 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <title>Firma la verificación</title>
-</head>
-<body>
-    <h1>Firma esta transacción para confirmar que controlas tu wallet</h1>
-    {% if error %}<p style="color:red;">{{ error }}</p>{% endif %}
-    <p>Llave pública: <strong>{{ public_key }}</strong></p>
-    <p>Copia este XDR y fírmalo en
-        <a href="https://laboratory.stellar.org/#txsigner?xdr={{ challenge_xdr|urlencode }}&network=test" target="_blank">
-            Stellar Laboratory
-        </a> (Sign Transaction), usando tu llave secreta de testnet:</p>
-    <textarea readonly rows="6" cols="80">{{ challenge_xdr }}</textarea>
+{% extends "accounts/_base.html" %}
+{% block title %}Firma la verificación · Anchor VERSO{% endblock %}
+
+{% block content %}
+    <h1>Confirma que la llave es tuya</h1>
+    <p class="lede">Firma esta transacción de prueba con tu llave secreta. No mueve fondos, solo demuestra que controlas <strong>{{ public_key|slice:":4" }}…{{ public_key|slice:"-4:" }}</strong>.</p>
+
+    {% if error %}<div class="error">{{ error }}</div>{% endif %}
+
+    <div class="field">
+        <label for="id_challenge">XDR para firmar</label>
+        <textarea id="id_challenge" class="mono" rows="5" readonly>{{ challenge_xdr }}</textarea>
+    </div>
+
+    <p class="foot-link">
+        Ábrelo en
+        <a href="https://laboratory.stellar.org/#txsigner?xdr={{ challenge_xdr|urlencode }}&network=test" target="_blank" rel="noopener">Stellar Laboratory</a>
+        y firma con tu llave secreta de testnet.
+    </p>
+
     <form method="post" action="{% url 'accounts:link_stellar_submit' %}">
         {% csrf_token %}
-        <p><label>XDR firmado:<br>
-            <textarea name="signed_xdr" rows="6" cols="80" required></textarea>
-        </label></p>
-        <button type="submit">Verificar y vincular</button>
+        <div class="field">
+            <label for="id_signed_xdr">XDR firmado</label>
+            <textarea id="id_signed_xdr" class="mono" name="signed_xdr" rows="5" required></textarea>
+        </div>
+        <button type="submit" class="btn">Verificar y vincular</button>
     </form>
-</body>
-</html>
+{% endblock %}

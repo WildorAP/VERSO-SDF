@@ -143,8 +143,10 @@ def _local_user_for(verso_user: dict) -> User:
 
 @require_http_methods(["GET", "POST"])
 def register(request):
+    base_context = {"step": 1, "show_rail": True}
+
     if request.method == "GET":
-        return render(request, "accounts/register.html")
+        return render(request, "accounts/register.html", base_context)
 
     email = request.POST.get("email", "").strip()
     password = request.POST.get("password", "")
@@ -155,7 +157,7 @@ def register(request):
         return render(
             request,
             "accounts/register.html",
-            {"error": "Email y contraseña son obligatorios."},
+            {**base_context, "error": "Email y contraseña son obligatorios."},
         )
 
     response = requests.post(
@@ -169,13 +171,13 @@ def register(request):
         return render(
             request,
             "accounts/register.html",
-            {"error": "Ese email ya está registrado en VERSO."},
+            {**base_context, "error": "Ese email ya está registrado en VERSO."},
         )
     if response.status_code != 201:
         return render(
             request,
             "accounts/register.html",
-            {"error": "No se pudo completar el registro. Intenta de nuevo más tarde."},
+            {**base_context, "error": "No se pudo completar el registro. Intenta de nuevo más tarde."},
         )
 
     data = response.json()
@@ -193,7 +195,7 @@ def verify_email(request):
         return redirect("accounts:register")
 
     if request.method == "GET":
-        return render(request, "accounts/verify_email.html", {"email": email})
+        return render(request, "accounts/verify_email.html", {"email": email, "step": 2, "show_rail": True})
 
     codigo = request.POST.get("codigo", "").strip()
 
@@ -208,7 +210,7 @@ def verify_email(request):
         return render(
             request,
             "accounts/verify_email.html",
-            {"email": email, "error": "Código inválido o expirado."},
+            {"email": email, "step": 2, "show_rail": True, "error": "Código inválido o expirado."},
         )
 
     request.session.pop("pending_verso_user_id", None)
@@ -226,6 +228,7 @@ def dashboard(request):
         request,
         "accounts/dashboard.html",
         {
+            "show_rail": False,
             "username": request.user.username,
             "stellar_public_key": profile.stellar_public_key if profile else None,
         },
@@ -233,13 +236,15 @@ def dashboard(request):
 
 @login_required(login_url="accounts:login")
 def link_stellar_start(request):
+    base_context = {"step": 3, "show_rail": True}
+
     if request.method == "GET":
-        return render(request, "accounts/link_stellar.html")
+        return render(request, "accounts/link_stellar.html", base_context)
 
     public_key = request.POST.get("public_key", "").strip()
     if not public_key:
         return render(
-            request, "accounts/link_stellar.html", {"error": "Ingresa una llave pública."}
+            request, "accounts/link_stellar.html", {**base_context, "error": "Ingresa una llave pública."}
         )
 
     host_url = os.environ.get("HOST_URL", "http://localhost:8000").rstrip("/")
@@ -252,7 +257,7 @@ def link_stellar_start(request):
         return render(
             request,
             "accounts/link_stellar.html",
-            {"error": "No se pudo generar el reto de verificación."},
+            {**base_context, "error": "No se pudo generar el reto de verificación."},
         )
 
     challenge = challenge_response.json()
@@ -261,6 +266,8 @@ def link_stellar_start(request):
         request,
         "accounts/link_stellar_sign.html",
         {
+            "step": 3,
+            "show_rail": True,
             "public_key": public_key,
             "challenge_xdr": challenge.get("transaction"),
             "network_passphrase": challenge.get("network_passphrase"),
@@ -287,6 +294,8 @@ def link_stellar_submit(request):
             request,
             "accounts/link_stellar_sign.html",
             {
+                "step": 3,
+                "show_rail": True,
                 "public_key": public_key,
                 "error": "La firma no pudo validarse. Verifica e intenta de nuevo.",
             },
@@ -307,6 +316,8 @@ def link_stellar_submit(request):
             request,
             "accounts/link_stellar_sign.html",
             {
+                "step": 3,
+                "show_rail": True,
                 "public_key": public_key,
                 "error": "Esa llave ya está vinculada a otra cuenta de VERSO.",
             },

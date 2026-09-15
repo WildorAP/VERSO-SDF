@@ -1,16 +1,22 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <title>Mi cuenta — Anchor</title>
-</head>
-<body>
-    <h1>Sesión iniciada correctamente</h1>
-    <p>Usuario: <strong>{{ username }}</strong></p>
-    <p>Llave Stellar vinculada: {{ stellar_public_key|default:"Ninguna todavía" }}</p>
+{% extends "accounts/_base.html" %}
+{% load static %}
+{% block title %}Mi cuenta · Anchor VERSO{% endblock %}
+
+{% block content_simple %}
+    <img class="rail__logo" src="{% static 'accounts/img/verso-logo.png' %}" alt="VERSO" style="margin-bottom:2.5rem;">
+    <h1>Hola, {{ username }}</h1>
+    <p class="lede">Tu sesión de VERSO ya está activa aquí en el Anchor.</p>
+
+    <div class="field">
+        <label>Wallet Stellar</label>
+        <p style="margin:0.4rem 0 0; font-family:'SFMono-Regular', Consolas, monospace; font-size:0.9rem;">
+            {{ stellar_public_key|default:"Todavía no vinculada" }}
+        </p>
+    </div>
+
     {% if not stellar_public_key %}
-        <p><a href="{% url 'accounts:link_stellar_start' %}">Vincular wallet Stellar</a></p>
+        <a href="{% url 'accounts:link_stellar_start' %}" class="btn" style="display:inline-flex; width:auto; margin-top:1.5rem;">Vincular wallet Stellar</a>
     {% endif %}
-    <a href="{% url 'accounts:logout' %}">Cerrar sesión</a>
-</body>
-</html>
+
+    <p class="foot-link"><a href="{% url 'accounts:logout' %}">Cerrar sesión</a></p>
+{% endblock %}

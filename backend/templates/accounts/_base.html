@@ -1,0 +1,48 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Anchor · VERSO{% endblock %}</title>
+    <link rel="stylesheet" href="{% static 'accounts/css/anchor.css' %}">
+</head>
+<body>
+    {% if show_rail %}
+    <div class="shell">
+        <aside class="rail">
+            <img class="rail__logo" src="{% static 'accounts/img/verso-logo.png' %}" alt="VERSO">
+            <ol class="steps">
+                <li class="step {% if step > 1 %}is-done{% elif step == 1 %}is-current{% endif %}">
+                    <div class="step__label">Cuenta</div>
+                    <div class="step__hint">Correo y contraseña</div>
+                </li>
+                <li class="step {% if step > 2 %}is-done{% elif step == 2 %}is-current{% endif %}">
+                    <div class="step__label">Verificación</div>
+                    <div class="step__hint">Código enviado a tu correo</div>
+                </li>
+                <li class="step {% if step == 3 %}is-current{% endif %}">
+                    <div class="step__label">Wallet</div>
+                    <div class="step__hint">Vincula tu llave Stellar</div>
+                </li>
+            </ol>
+        </aside>
+        <div class="rail-mobile">
+            <img src="{% static 'accounts/img/verso-logo.png' %}" alt="VERSO">
+            <span class="rail-mobile__step">Paso {{ step }} de 3</span>
+        </div>
+        <main class="content">
+            <div class="content__inner">
+                {% block content %}{% endblock %}
+            </div>
+        </main>
+    </div>
+    {% else %}
+    <div class="shell shell--simple">
+        <div class="content__inner">
+            {% block content_simple %}{% endblock %}
+        </div>
+    </div>
+    {% endif %}
+</body>
+</html>

@@ -1,20 +1,32 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <title>Crear cuenta</title>
-</head>
-<body>
-    <h1>Crear cuenta</h1>
-    {% if error %}<p style="color:red;">{{ error }}</p>{% endif %}
+{% extends "accounts/_base.html" %}
+{% block title %}Crear cuenta · Anchor VERSO{% endblock %}
+
+{% block content %}
+    <h1>Crea tu cuenta</h1>
+    <p class="lede">Con esta cuenta entras al Anchor y a VERSO — es la misma identidad en los dos.</p>
+
+    {% if error %}<div class="error">{{ error }}</div>{% endif %}
+
     <form method="post">
         {% csrf_token %}
-        <label>Email: <input type="email" name="email" required></label><br>
-        <label>Contraseña: <input type="password" name="password" required></label><br>
-        <label>Nombre: <input type="text" name="nombre"></label><br>
-        <label>Apellidos: <input type="text" name="apellidos"></label><br>
-        <button type="submit">Registrarme</button>
+        <div class="field">
+            <label for="id_email">Correo</label>
+            <input id="id_email" type="email" name="email" placeholder="tu@correo.com" required>
+        </div>
+        <div class="field">
+            <label for="id_password">Contraseña</label>
+            <input id="id_password" type="password" name="password" required>
+        </div>
+        <div class="field">
+            <label for="id_nombre">Nombre</label>
+            <input id="id_nombre" type="text" name="nombre">
+        </div>
+        <div class="field">
+            <label for="id_apellidos">Apellidos</label>
+            <input id="id_apellidos" type="text" name="apellidos">
+        </div>
+        <button type="submit" class="btn">Crear cuenta</button>
     </form>
-    <a href="{% url 'accounts:login' %}">Ya tengo cuenta</a>
-</body>
-</html>
+
+    <p class="foot-link">¿Ya tienes cuenta? <a href="{% url 'accounts:login' %}">Inicia sesión</a></p>
+{% endblock %}

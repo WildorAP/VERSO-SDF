@@ -1,16 +1,18 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <title>Vincular wallet Stellar</title>
-</head>
-<body>
-    <h1>Vincular tu wallet Stellar</h1>
-    {% if error %}<p style="color:red;">{{ error }}</p>{% endif %}
+{% extends "accounts/_base.html" %}
+{% block title %}Vincular wallet · Anchor VERSO{% endblock %}
+
+{% block content %}
+    <h1>Vincula tu wallet Stellar</h1>
+    <p class="lede">Pega la llave pública de tu wallet (empieza con G). Después te vamos a pedir que firmes un reto para confirmar que es tuya.</p>
+
+    {% if error %}<div class="error">{{ error }}</div>{% endif %}
+
     <form method="post">
         {% csrf_token %}
-        <label>Llave pública (G...): <input type="text" name="public_key" size="60" required></label>
-        <button type="submit">Continuar</button>
+        <div class="field">
+            <label for="id_public_key">Llave pública</label>
+            <input id="id_public_key" type="text" name="public_key" placeholder="G..." autocomplete="off" required>
+        </div>
+        <button type="submit" class="btn">Continuar</button>
     </form>
-</body>
-</html>
+{% endblock %}
