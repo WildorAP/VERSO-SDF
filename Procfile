@@ -1,1 +1,87 @@
-web: cd backend && python manage.py migrate --noinput && gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --timeout 120
+name: Backend Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    # PostgreSQL matches production (Railway). SQLite does not support
+    # SELECT ... FOR UPDATE, so the row-locking test in
+    # test_deposit_concurrency.py is meaningless (and flaky) on SQLite.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: verso
+          POSTGRES_PASSWORD: verso
+          POSTGRES_DB: verso_anchor
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r ../requirements.txt
+
+      - name: Generate ephemeral testnet keys for CI
+        run: |
+          python -c "
+          from stellar_sdk import Keypair
+          import secrets, os
+          with open(os.environ['GITHUB_ENV'], 'a') as f:
+              f.write(f'SIGNING_SEED={Keypair.random().secret}\n')
+              f.write(f'DJANGO_SECRET_KEY={secrets.token_urlsafe(50)}\n')
+              f.write(f'SERVER_JWT_KEY={secrets.token_urlsafe(32)}\n')
+          "
+
+      - name: Collect static files
+        env:
+          DEBUG: "False"
+          DATABASE_URL: "postgres://verso:verso@localhost:5432/verso_anchor"
+          REDIS_URL: "redis://localhost:6379/0"
+          ACTIVE_SEPS: "sep-1,sep-10,sep-38,sep-24"
+          HOST_URL: "http://localhost:8000"
+          LOCAL_MODE: "1"
+          SEP10_HOME_DOMAINS: "localhost:8000"
+          STELLAR_NETWORK_PASSPHRASE: "Test SDF Network ; September 2015"
+        run: python manage.py collectstatic --noinput
+
+      - name: Run Django tests
+        env:
+          DEBUG: "False"
+          DATABASE_URL: "postgres://verso:verso@localhost:5432/verso_anchor"
+          REDIS_URL: "redis://localhost:6379/0"
+          ACTIVE_SEPS: "sep-1,sep-10,sep-38,sep-24"
+          HOST_URL: "http://localhost:8000"
+          LOCAL_MODE: "1"
+          SEP10_HOME_DOMAINS: "localhost:8000"
+          STELLAR_NETWORK_PASSPHRASE: "Test SDF Network ; September 2015"
+        run: python manage.py test verso_integrations

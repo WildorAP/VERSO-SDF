@@ -131,11 +131,15 @@ def oauth_callback(request):
 def _local_user_for(verso_user: dict) -> User:
     """Create (once) a local, passwordless mirror user for this VERSO account."""
     local_username = f"verso_{verso_user['id']}"
-    user, _created = User.objects.get_or_create(
+    user, created = User.objects.get_or_create(
         username=local_username,
         defaults={"email": verso_user.get("email", "")},
     )
-    if not user.has_usable_password():
+    # A freshly created User has password == "", and has_usable_password()
+    # only checks for the "!"-prefixed unusable marker — an empty string
+    # doesn't match that, so it reports the password as usable. Cover both
+    # the creation case and any pre-existing row left with an empty password.
+    if created or not user.password:
         user.set_unusable_password()
         user.save(update_fields=["password"])
     return user
