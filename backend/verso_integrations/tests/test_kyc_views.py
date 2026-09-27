@@ -41,6 +41,7 @@ class KycViewTests(TestCase):
         session[f"{prefix}:verso_user_id"] = 42
         session[f"{prefix}:verso_email"] = "user@example.com"
         session[f"{prefix}:email_verified"] = True
+        session[f"{prefix}:profile_completed"] = True
         session.save()
 
     @patch("verso_integrations.sep24.onboarding_views.prepare_kyc_step")
@@ -61,6 +62,18 @@ class KycViewTests(TestCase):
         self.assertContains(response, "https://verification.didit.me/v/session-abc")
         self.assertContains(response, "Abrir en pantalla completa")
         mock_prepare.assert_called_once()
+
+    def test_onboarding_renders_profile_wizard_before_didit(self):
+        session = self.client.session
+        prefix = f"sep24:{self.transaction.id}"
+        session.pop(f"{prefix}:profile_completed", None)
+        session.save()
+        response = self.client.get(
+            f"/sep24/onboarding/?transaction_id={self.transaction.id}"
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Completa tu perfil")
+        self.assertContains(response, "profile-wizard-form")
 
     @patch("verso_integrations.sep24.kyc_views.kyc_handoff")
     def test_kyc_start_redirects_to_didit(self, mock_handoff):
