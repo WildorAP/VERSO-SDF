@@ -307,6 +307,21 @@ h1 {
   font-size: 0.9rem;
 }
 
+.didit-status--success {
+  color: #34d399;
+  font-weight: 500;
+}
+
+.didit-status--error {
+  color: var(--danger);
+}
+
+.deposit-wait-stellar {
+  margin-top: 0.75rem;
+  text-align: center;
+  font-size: 0.9rem;
+}
+
 .didit-fallback {
   text-align: center;
 }

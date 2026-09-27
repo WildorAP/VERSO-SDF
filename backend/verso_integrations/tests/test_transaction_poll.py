@@ -105,6 +105,68 @@ class MoreInfoAutoRefreshTests(TestCase):
         self.assertEqual(content["template_name"], "sep24/onboarding/deposit_waiting.html")
         self.assertIn("/sep24/transaction/poll/", content["poll_url"])
         self.assertIn(str(self.transaction.id), content["poll_url"])
+        self.assertTrue(content["poll_enabled"])
+        self.assertEqual(content["transaction_status"], "pending_user_transfer_start")
+
+    @patch("verso_integrations.sep24.integration.get_pen_usdc_rate")
+    def test_deposit_waiting_skips_poll_when_completed(self, mock_rate):
+        from verso_integrations.rates import FiatUsdcRate
+        from verso_integrations.sep24.forms import PenDepositForm
+
+        mock_rate.return_value = FiatUsdcRate(
+            rate_venta=Decimal("4.0000"), rate_compra=Decimal("3.9500")
+        )
+        form = PenDepositForm({"amount_pen": "50.00"})
+        self.assertTrue(form.is_valid())
+        self.integration.after_form_validation(self.request, form, self.transaction)
+        meta = Sep24DepositMeta.objects.get(transaction=self.transaction)
+        from django.utils import timezone
+
+        meta.transfer_declared_at = timezone.now()
+        meta.save(update_fields=["transfer_declared_at"])
+        self.transaction.status = Transaction.STATUS.completed
+        self.transaction.stellar_transaction_id = "abc123stellarhash"
+        self.transaction.save(update_fields=["status", "stellar_transaction_id"])
+
+        content = self.integration.content_for_template(
+            self.request,
+            Template.MORE_INFO,
+            transaction=self.transaction,
+        )
+        self.assertFalse(content["poll_enabled"])
+        self.assertEqual(content["transaction_status"], "completed")
+        self.assertEqual(content["status_message"], "Operación finalizada")
+        self.assertEqual(content["stellar_transaction_id"], "abc123stellarhash")
+
+    @patch("verso_integrations.sep24.integration.get_pen_usdc_rate")
+    def test_deposit_waiting_completed_template_has_no_poll_script(self, mock_rate):
+        from django.template.loader import render_to_string
+        from verso_integrations.rates import FiatUsdcRate
+        from verso_integrations.sep24.forms import PenDepositForm
+
+        mock_rate.return_value = FiatUsdcRate(
+            rate_venta=Decimal("4.0000"), rate_compra=Decimal("3.9500")
+        )
+        form = PenDepositForm({"amount_pen": "50.00"})
+        self.assertTrue(form.is_valid())
+        self.integration.after_form_validation(self.request, form, self.transaction)
+        meta = Sep24DepositMeta.objects.get(transaction=self.transaction)
+        from django.utils import timezone
+
+        meta.transfer_declared_at = timezone.now()
+        meta.save(update_fields=["transfer_declared_at"])
+        self.transaction.status = Transaction.STATUS.completed
+        self.transaction.save(update_fields=["status"])
+
+        content = self.integration.content_for_template(
+            self.request,
+            Template.MORE_INFO,
+            transaction=self.transaction,
+        )
+        html = render_to_string(content["template_name"], content)
+        self.assertIn("Operación finalizada", html)
+        self.assertNotIn("deposit_wait_poll.js", html)
+        self.assertNotIn("deposit-wait-poll-root", html)
 
     @patch("verso_integrations.sep24.integration.get_pen_usdc_rate")
     def test_transfer_template_renders_cci_copy_fields(self, mock_rate):

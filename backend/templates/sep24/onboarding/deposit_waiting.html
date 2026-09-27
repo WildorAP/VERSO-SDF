@@ -1,16 +1,26 @@
 {% extends "sep24/onboarding/_base.html" %}
 {% load static %}
-{% block title %}Procesando depósito · Anchor VERSO{% endblock %}
+{% block title %}{% if transaction_status == "completed" %}Operación finalizada{% else %}Procesando depósito{% endif %} · Anchor VERSO{% endblock %}
 
 {% block content %}
-    <h1>Transferencia registrada</h1>
-    <p class="lede">
-        {% if receipt_uploaded %}
+    <h1 id="deposit-wait-heading">
+        {% if transaction_status == "completed" %}
+        Operación finalizada
+        {% else %}
+        Transferencia registrada
+        {% endif %}
+    </h1>
+    <p class="lede" id="deposit-wait-lede">
+        {% if transaction_status == "completed" %}
+        Enviamos <strong>{{ amount_usdc }} USDC</strong> a tu wallet Stellar.
+        {% elif receipt_uploaded %}
         Recibimos tu constancia. Estamos verificando el depósito en soles.
         {% else %}
         Registramos tu confirmación. Estamos verificando el depósito en soles.
         {% endif %}
+        {% if transaction_status != "completed" %}
         Te enviaremos <strong>{{ amount_usdc }} USDC</strong> en cuanto confirmemos los S/ {{ amount_pen }}.
+        {% endif %}
     </p>
 
     <div class="transfer-summary">
@@ -30,39 +40,32 @@
         {% endif %}
     </div>
 
-    <p id="deposit-wait-status" class="didit-status" role="status">
-        Verificando depósito…
+    <p
+        id="deposit-wait-status"
+        class="didit-status{% if transaction_status == 'completed' %} didit-status--success{% elif transaction_status == 'error' %} didit-status--error{% endif %}"
+        role="status"
+    >
+        {{ status_message }}
     </p>
+
+    {% if stellar_transaction_id %}
+    <p class="deposit-wait-stellar">
+        <a href="https://stellar.expert/explorer/public/tx/{{ stellar_transaction_id }}" target="_blank" rel="noopener noreferrer">
+            Ver transacción en Stellar Expert
+        </a>
+    </p>
+    {% endif %}
 {% endblock %}
 
 {% block extra_scripts %}
-{% if poll_url %}
-<script>
-(function () {
-    var pollUrl = "{{ poll_url|escapejs }}";
-    var statusEl = document.getElementById("deposit-wait-status");
-
-    function poll() {
-        fetch(pollUrl, { credentials: "same-origin", headers: { Accept: "application/json" } })
-            .then(function (response) { return response.json(); })
-            .then(function (payload) {
-                if (payload.status === "completed") {
-                    if (statusEl) {
-                        statusEl.textContent = "¡Listo! USDC enviado a tu wallet.";
-                    }
-                    window.location.reload();
-                } else if (payload.status === "error") {
-                    if (statusEl) {
-                        statusEl.textContent = "Hubo un problema con tu depósito. Escríbenos a soporte@versotek.io.";
-                    }
-                }
-            })
-            .catch(function () {});
-    }
-
-    setInterval(poll, 4000);
-    poll();
-})();
-</script>
+{% if poll_enabled %}
+<div
+    id="deposit-wait-poll-root"
+    data-poll-url="{{ poll_url|escape }}"
+    data-status="{{ transaction_status|escape }}"
+    data-amount-usdc="{{ amount_usdc|escape }}"
+    hidden
+></div>
+<script src="{% static 'sep24/js/deposit_wait_poll.js' %}"></script>
 {% endif %}
 {% endblock %}

@@ -26,6 +26,7 @@ from verso_integrations.polaris_setup import (
     usdc_asset_identification,
 )
 from verso_integrations.rates import RatesError, get_pen_usdc_rate
+from verso_integrations.sep24.transaction_views import TERMINAL_TRANSACTION_STATUSES
 from verso_integrations.sep24.forms import (
     BankTransferReceiptForm,
     PenDepositForm,
@@ -77,8 +78,34 @@ def _onboarding_switch_url(request: Request, transaction: Transaction, mode: str
     return request.build_absolute_uri(f"{path}?{query}")
 
 
+def _deposit_wait_status_message(
+    transaction: Transaction, meta: Sep24DepositMeta
+) -> str:
+    status = transaction.status
+    if status == Transaction.STATUS.completed:
+        return "Operación finalizada"
+    if status == Transaction.STATUS.error:
+        return (
+            transaction.message
+            or "Hubo un problema con tu depósito. Escríbenos a soporte@versotek.io."
+        )
+    if (
+        meta.fiat_confirmed_at
+        and status == Transaction.STATUS.pending_user_transfer_start
+    ):
+        return "Depósito confirmado. Enviando USDC a tu wallet…"
+    messages = {
+        Transaction.STATUS.pending_user_transfer_start: "Verificando depósito en soles…",
+        Transaction.STATUS.pending_anchor: "Depósito confirmado. Enviando USDC a tu wallet…",
+        Transaction.STATUS.pending_stellar: "Enviando USDC on-chain…",
+        Transaction.STATUS.pending_external: "Procesando depósito…",
+    }
+    return messages.get(status, "Procesando depósito…")
+
+
 def _deposit_waiting_content(request: Request, transaction: Transaction, meta: Sep24DepositMeta, base: dict) -> dict:
     poll_query = urlencode({"id": str(transaction.id)})
+    terminal = transaction.status in TERMINAL_TRANSACTION_STATUSES
     base.update(
         {
             "bank_instructions": meta.bank_instructions,
@@ -87,6 +114,10 @@ def _deposit_waiting_content(request: Request, transaction: Transaction, meta: S
             "show_rail": True,
             "show_timeline": False,
             "receipt_uploaded": bool(meta.transfer_receipt),
+            "transaction_status": str(transaction.status),
+            "status_message": _deposit_wait_status_message(transaction, meta),
+            "poll_enabled": not terminal,
+            "stellar_transaction_id": transaction.stellar_transaction_id or "",
             "poll_url": request.build_absolute_uri(
                 f"{reverse('sep24_transaction_poll')}?{poll_query}"
             ),
