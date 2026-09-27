@@ -1,0 +1,16 @@
+{% extends "polaris/more_info.html" %}
+{% load static %}
+
+{% block "body_scripts" %}
+{{ block.super }}
+{% if poll_url and transaction.status != "completed" and transaction.status != "error" %}
+<div
+  id="verso-tx-poll-root"
+  hidden
+  data-poll-url="{{ poll_url }}"
+  data-status="{{ transaction.status }}"
+  data-on-change="{{ transaction.on_change_callback|default:'' }}"
+></div>
+<script defer src="{% static 'sep24/js/more_info_poll.js' %}"></script>
+{% endif %}
+{% endblock %}

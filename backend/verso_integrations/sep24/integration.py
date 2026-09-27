@@ -256,6 +256,11 @@ class VersoDepositIntegration(DepositIntegration):
             if meta:
                 base["guidance"] = _format_bank_guidance(meta.bank_instructions)
                 base["bank_instructions"] = meta.bank_instructions
+            poll_query = urlencode({"id": str(transaction.id)})
+            base["poll_url"] = request.build_absolute_uri(
+                f"{reverse('sep24_transaction_poll')}?{poll_query}"
+            )
+            base["template_name"] = "polaris/more_info_verso.html"
             return base
 
         if transaction is None or form is None:
