@@ -1,7 +1,14 @@
 from django import forms
 from django.core.exceptions import ValidationError
 
-from verso_integrations.core_client import CoreClientError, login_user, register_user, user_status, verify_email
+from verso_integrations.core_client import (
+    CoreClientError,
+    login_user,
+    register_user,
+    update_user_profile,
+    user_status,
+    verify_email,
+)
 from verso_integrations.sep24.kyc_gate import ensure_stellar_wallet_linked, get_pending_verso_user
 
 
@@ -92,6 +99,100 @@ class VersoVerifyEmailForm(forms.Form):
                     return codigo
             raise ValidationError(str(exc)) from exc
         return codigo
+
+
+class VersoProfileForm(forms.Form):
+    celular = forms.CharField(label="Celular", max_length=20)
+    ocupacion = forms.CharField(label="Profesión o actividad comercial", max_length=100)
+    origen_fondos = forms.ChoiceField(
+        label="Origen de fondos",
+        choices=[
+            ("SUELDO", "Sueldo / salario"),
+            ("AHORROS", "Ahorros"),
+            ("INVERSION", "Inversión"),
+            ("TRADING", "Trading / operaciones"),
+            ("OTRO", "Otro"),
+        ],
+    )
+    origen_fondos_otro = forms.CharField(
+        label="Especifica el origen",
+        max_length=200,
+        required=False,
+    )
+    casado = forms.ChoiceField(
+        label="¿Estás casado/a?",
+        choices=[("no", "No"), ("si", "Sí")],
+    )
+    nombre_conyugue = forms.CharField(
+        label="Nombre del cónyuge",
+        max_length=200,
+        required=False,
+    )
+    es_pep = forms.ChoiceField(
+        label="¿Eres o has sido PEP?",
+        choices=[("no", "No"), ("si", "Sí")],
+    )
+    es_familiar_pep = forms.ChoiceField(
+        label="¿Eres familiar de un PEP?",
+        choices=[("no", "No"), ("si", "Sí")],
+    )
+    familiar_pep_nombre = forms.CharField(
+        label="Nombre del familiar PEP",
+        max_length=200,
+        required=False,
+    )
+    familiar_pep_cargo = forms.CharField(
+        label="Cargo o puesto del familiar PEP",
+        max_length=200,
+        required=False,
+    )
+
+    def __init__(self, *args, request=None, transaction=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.request = request
+        self.transaction = transaction
+        self.profile_result = None
+
+    def clean(self):
+        cleaned = super().clean()
+        if self.errors:
+            return cleaned
+
+        if cleaned.get("origen_fondos") == "OTRO" and not cleaned.get("origen_fondos_otro", "").strip():
+            raise ValidationError("Especifica el origen de fondos.")
+
+        if cleaned.get("casado") == "si" and not cleaned.get("nombre_conyugue", "").strip():
+            raise ValidationError("Ingresa el nombre de tu cónyuge.")
+
+        if cleaned.get("es_familiar_pep") == "si":
+            if not cleaned.get("familiar_pep_nombre", "").strip():
+                raise ValidationError("Ingresa el nombre del familiar PEP.")
+            if not cleaned.get("familiar_pep_cargo", "").strip():
+                raise ValidationError("Indica el cargo o puesto del familiar PEP.")
+
+        user_id, _email = get_pending_verso_user(self.request, self.transaction.id)
+        if not user_id:
+            raise ValidationError("Vuelve a iniciar sesión para continuar.")
+
+        payload = {
+            "celular": cleaned["celular"],
+            "ocupacion": cleaned["ocupacion"],
+            "origen_fondos": cleaned["origen_fondos"],
+            "origen_fondos_otro": cleaned.get("origen_fondos_otro", ""),
+            "casado": cleaned["casado"] == "si",
+            "nombre_conyugue": cleaned.get("nombre_conyugue", ""),
+            "es_pep": cleaned["es_pep"] == "si",
+            "es_familiar_pep": cleaned["es_familiar_pep"] == "si",
+            "familiar_pep_nombre": cleaned.get("familiar_pep_nombre", ""),
+            "familiar_pep_cargo": cleaned.get("familiar_pep_cargo", ""),
+        }
+
+        try:
+            self.profile_result = update_user_profile(user_id=user_id, profile=payload)
+        except CoreClientError as exc:
+            raise ValidationError(str(exc)) from exc
+
+        return cleaned
 
 
 class KycStatusForm(forms.Form):

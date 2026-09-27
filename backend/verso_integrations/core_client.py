@@ -30,8 +30,20 @@ class UserStatusResult:
     active: bool = True
     email_verified: bool = False
     kyc_completed: bool = False
+    profile_completed: bool = False
+    pep_requires_manual_review: bool = False
+    pep_manual_review_pending: bool = False
     stellar_public_key: str | None = None
     stellar_linked: bool = False
+
+
+@dataclass(frozen=True)
+class ProfileUpdateResult:
+    user_id: int
+    email: str
+    profile_completed: bool
+    pep_requires_manual_review: bool
+    pep_manual_review_pending: bool
 
 
 @dataclass(frozen=True)
@@ -49,6 +61,9 @@ def _parse_user_status(payload: dict) -> UserStatusResult:
         active=bool(payload.get("active", True)),
         email_verified=bool(payload.get("email_verified")),
         kyc_completed=bool(payload.get("kyc_completed")),
+        profile_completed=bool(payload.get("profile_completed")),
+        pep_requires_manual_review=bool(payload.get("pep_requires_manual_review")),
+        pep_manual_review_pending=bool(payload.get("pep_manual_review_pending")),
         stellar_public_key=str(stellar_key) if stellar_key else None,
         stellar_linked=bool(payload.get("stellar_linked")),
     )
@@ -188,6 +203,41 @@ def verify_email(*, user_id: int, codigo: str) -> None:
 
     if response.status_code != 200:
         raise CoreClientError("Invalid or expired verification code.")
+
+
+def update_user_profile(*, user_id: int, profile: dict) -> ProfileUpdateResult:
+    payload = {"user_id": user_id, **profile}
+    try:
+        response = requests.post(
+            f"{_base_url()}/internal/users/profile/",
+            headers=_internal_headers(),
+            json=payload,
+            timeout=10,
+        )
+    except requests.RequestException as exc:
+        raise CoreClientError(f"Failed to save profile: {exc}") from exc
+
+    if response.status_code == 400:
+        try:
+            detail = response.json().get("error", "")
+        except ValueError:
+            detail = ""
+        raise CoreClientError(detail or "Revisa los datos del perfil.")
+    if response.status_code == 404:
+        raise CoreClientError("Usuario no encontrado en VERSO.")
+    if response.status_code != 200:
+        raise CoreClientError(
+            f"Could not save profile with VERSO Core (HTTP {response.status_code})."
+        )
+
+    body = response.json()
+    return ProfileUpdateResult(
+        user_id=int(body.get("user_id", user_id)),
+        email=str(body.get("email", "")),
+        profile_completed=bool(body.get("profile_completed")),
+        pep_requires_manual_review=bool(body.get("pep_requires_manual_review")),
+        pep_manual_review_pending=bool(body.get("pep_manual_review_pending")),
+    )
 
 
 def kyc_handoff(*, user_id: int, return_url: str) -> KycHandoffResult:

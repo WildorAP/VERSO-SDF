@@ -73,6 +73,14 @@ def is_email_verified(request, transaction_id) -> bool:
     return bool(session_get(request, transaction_id, "email_verified"))
 
 
+def mark_profile_completed(request, transaction_id) -> None:
+    session_set(request, transaction_id, "profile_completed", True)
+
+
+def is_profile_completed(request, transaction_id) -> bool:
+    return bool(session_get(request, transaction_id, "profile_completed"))
+
+
 def wants_register(request, transaction_id) -> bool:
     return bool(session_get(request, transaction_id, "wants_register"))
 
@@ -109,6 +117,8 @@ def apply_verso_user_session(request, transaction_id, status) -> None:
     )
     if status.email_verified:
         mark_email_verified(request, transaction_id)
+    if status.profile_completed:
+        mark_profile_completed(request, transaction_id)
     if status.kyc_completed:
         mark_session_kyc_approved(request, transaction_id)
 
@@ -171,6 +181,23 @@ def sync_email_verified_from_core(request, transaction_id) -> bool:
     return False
 
 
+def sync_profile_from_core(request, transaction_id) -> bool:
+    """Align session with VERSO when profile was completed elsewhere."""
+    if is_profile_completed(request, transaction_id):
+        return True
+    _user_id, email = get_pending_verso_user(request, transaction_id)
+    if not email:
+        return False
+    try:
+        status = user_status(email=email)
+    except CoreClientError:
+        return False
+    if status.profile_completed:
+        mark_profile_completed(request, transaction_id)
+        return True
+    return False
+
+
 def sync_kyc_from_core(request, transaction_id) -> ClientKycStatus | None:
     """Refresh KYC flags from ``GET /internal/users/status/`` when email is known."""
     _user_id, email = get_pending_verso_user(request, transaction_id)
@@ -222,7 +249,7 @@ def onboarding_step(request, transaction) -> str:
     """
     Next onboarding step inside the SEP-24 webview.
 
-    Returns one of: login | register | deposit | verify_email | didit | pending | rejected
+    Returns one of: login | register | deposit | verify_email | profile | didit | pending | rejected
     """
     kyc = lookup_client_kyc(
         transaction.stellar_account,
@@ -237,9 +264,12 @@ def onboarding_step(request, transaction) -> str:
         return "pending"
 
     sync_email_verified_from_core(request, transaction.id)
+    sync_profile_from_core(request, transaction.id)
 
     user_id, _email = get_pending_verso_user(request, transaction.id)
     if user_id and is_email_verified(request, transaction.id):
+        if not is_profile_completed(request, transaction.id):
+            return "profile"
         return "didit"
     if user_id:
         return "verify_email"

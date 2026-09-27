@@ -31,6 +31,18 @@ class Sep24DepositMeta(models.Model):
         help_text="SEP-38 asset id received on-chain (stellar:USDC:...).",
     )
     bank_instructions = models.JSONField(default=dict, blank=True)
+    transfer_receipt = models.FileField(
+        upload_to="sep24/receipts/%Y/%m/",
+        blank=True,
+        null=True,
+        help_text="Bank transfer voucher uploaded by the client.",
+    )
+    transfer_declared_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="When the client confirmed they sent the PEN transfer.",
+    )
     fiat_confirmed_at = models.DateTimeField(null=True, blank=True, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

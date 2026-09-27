@@ -1,0 +1,170 @@
+{% extends "sep24/onboarding/_base.html" %}
+{% load static %}
+{% block title %}Tu perfil · Anchor VERSO{% endblock %}
+
+{% block content %}
+    <div class="wizard-shell">
+        <div class="wizard-progress" aria-hidden="true">
+            <div class="wizard-progress__bar" id="wizard-progress-bar"></div>
+        </div>
+        <p class="wizard-step-label" id="wizard-step-label">Paso 1 de 5</p>
+
+        <h1>Completa tu perfil</h1>
+        <p class="lede">Unos datos más y continuamos con la verificación de identidad.</p>
+
+        {% if error %}<div class="error">{{ error }}</div>{% endif %}
+        {% if form.non_field_errors %}
+            {% for err in form.non_field_errors %}
+            <div class="error">{{ err }}</div>
+            {% endfor %}
+        {% endif %}
+
+        <form method="post" class="wizard-form" id="profile-wizard-form" novalidate>
+            {% csrf_token %}
+
+            <section class="wizard-card is-active" data-step="1">
+                <h2 class="wizard-card__title">Tu celular</h2>
+                <p class="wizard-card__hint">Lo usaremos solo para avisos importantes sobre tu operación.</p>
+                <div class="field field--phone">
+                    <label for="id_celular">Número de celular</label>
+                    <div class="phone-input">
+                        <span class="phone-input__prefix">+51</span>
+                        <input id="id_celular" type="tel" name="celular" inputmode="numeric" maxlength="9"
+                               placeholder="987 654 321" autocomplete="tel-national" required
+                               value="{{ form.celular.value|default:'' }}">
+                    </div>
+                    {% if form.celular.errors %}<p class="field-error">{{ form.celular.errors.0 }}</p>{% endif %}
+                </div>
+                <button type="button" class="btn wizard-next">Continuar</button>
+            </section>
+
+            <section class="wizard-card" data-step="2" hidden>
+                <h2 class="wizard-card__title">Profesión o actividad</h2>
+                <p class="wizard-card__hint">Indica a qué te dedicas actualmente.</p>
+                <div class="field">
+                    <label for="id_ocupacion">Profesión o actividad comercial</label>
+                    <input id="id_ocupacion" type="text" name="ocupacion" maxlength="100"
+                           placeholder="Ej. Ingeniero, comerciante, consultor…" required
+                           value="{{ form.ocupacion.value|default:'' }}">
+                    {% if form.ocupacion.errors %}<p class="field-error">{{ form.ocupacion.errors.0 }}</p>{% endif %}
+                </div>
+                <div class="wizard-actions">
+                    <button type="button" class="btn btn--ghost wizard-back">Atrás</button>
+                    <button type="button" class="btn wizard-next">Continuar</button>
+                </div>
+            </section>
+
+            <section class="wizard-card" data-step="3" hidden>
+                <h2 class="wizard-card__title">Origen de fondos</h2>
+                <p class="wizard-card__hint">¿De dónde provienen los fondos que usarás en VERSO?</p>
+                <div class="field">
+                    <label for="id_origen_fondos">Origen principal</label>
+                    <select id="id_origen_fondos" name="origen_fondos" required>
+                        {% for value, label in form.fields.origen_fondos.choices %}
+                        <option value="{{ value }}"{% if form.origen_fondos.value == value %} selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="field field--conditional" id="origen-otro-wrap" hidden>
+                    <label for="id_origen_fondos_otro">Especifica el origen</label>
+                    <input id="id_origen_fondos_otro" type="text" name="origen_fondos_otro" maxlength="200"
+                           placeholder="Describe brevemente" value="{{ form.origen_fondos_otro.value|default:'' }}">
+                </div>
+                <div class="wizard-actions">
+                    <button type="button" class="btn btn--ghost wizard-back">Atrás</button>
+                    <button type="button" class="btn wizard-next">Continuar</button>
+                </div>
+            </section>
+
+            <section class="wizard-card" data-step="4" hidden>
+                <h2 class="wizard-card__title">Estado civil</h2>
+                <p class="wizard-card__hint">Solo pedimos el nombre de tu cónyuge si estás casado/a.</p>
+                <div class="choice-row" role="group" aria-label="¿Estás casado/a?">
+                    <label class="choice-chip">
+                        <input type="radio" name="casado" value="no"{% if form.casado.value != 'si' %} checked{% endif %}>
+                        <span>No</span>
+                    </label>
+                    <label class="choice-chip">
+                        <input type="radio" name="casado" value="si"{% if form.casado.value == 'si' %} checked{% endif %}>
+                        <span>Sí, estoy casado/a</span>
+                    </label>
+                </div>
+                <div class="field field--conditional" id="conyuge-wrap" hidden>
+                    <label for="id_nombre_conyugue">Nombre completo del cónyuge</label>
+                    <input id="id_nombre_conyugue" type="text" name="nombre_conyugue" maxlength="200"
+                           placeholder="Nombre y apellidos" value="{{ form.nombre_conyugue.value|default:'' }}">
+                </div>
+                <div class="wizard-actions">
+                    <button type="button" class="btn btn--ghost wizard-back">Atrás</button>
+                    <button type="button" class="btn wizard-next">Continuar</button>
+                </div>
+            </section>
+
+            <section class="wizard-card" data-step="5" hidden>
+                <h2 class="wizard-card__title">Declaración PEP</h2>
+                <p class="wizard-card__hint">
+                    Persona Expuesta Políticamente (PEP): cargo público relevante
+                    <strong>en los últimos 2 años</strong>.
+                </p>
+
+                <div class="field">
+                    <span class="field-label">¿Eres o has sido PEP en los últimos 2 años?</span>
+                    <div class="choice-row">
+                        <label class="choice-chip">
+                            <input type="radio" name="es_pep" value="no"{% if form.es_pep.value != 'si' %} checked{% endif %}>
+                            <span>No</span>
+                        </label>
+                        <label class="choice-chip">
+                            <input type="radio" name="es_pep" value="si"{% if form.es_pep.value == 'si' %} checked{% endif %}>
+                            <span>Sí</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="notice notice--warning" id="pep-notice" hidden>
+                    <strong>Verificación manual requerida.</strong>
+                    Tu cuenta será revisada por nuestro equipo de cumplimiento.
+                    Completa los datos restantes y podrás continuar con la verificación de identidad.
+                </div>
+
+                <div class="field">
+                    <span class="field-label">¿Eres familiar de un PEP (hasta 2.º grado) en los últimos 2 años?</span>
+                    <div class="choice-row">
+                        <label class="choice-chip">
+                            <input type="radio" name="es_familiar_pep" value="no"{% if form.es_familiar_pep.value != 'si' %} checked{% endif %}>
+                            <span>No</span>
+                        </label>
+                        <label class="choice-chip">
+                            <input type="radio" name="es_familiar_pep" value="si"{% if form.es_familiar_pep.value == 'si' %} checked{% endif %}>
+                            <span>Sí</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div id="familiar-pep-wrap" hidden>
+                    <div class="field">
+                        <label for="id_familiar_pep_nombre">Nombre del familiar PEP</label>
+                        <input id="id_familiar_pep_nombre" type="text" name="familiar_pep_nombre" maxlength="200"
+                               value="{{ form.familiar_pep_nombre.value|default:'' }}">
+                    </div>
+                    <div class="field">
+                        <label for="id_familiar_pep_cargo">Cargo o puesto del familiar PEP</label>
+                        <input id="id_familiar_pep_cargo" type="text" name="familiar_pep_cargo" maxlength="200"
+                               placeholder="Ej. Congresista, ministro, alcalde…"
+                               value="{{ form.familiar_pep_cargo.value|default:'' }}">
+                        <p class="field-hint">Debe haber ejercido el cargo en los últimos 2 años.</p>
+                    </div>
+                </div>
+
+                <div class="wizard-actions">
+                    <button type="button" class="btn btn--ghost wizard-back">Atrás</button>
+                    <button type="submit" class="btn">Guardar y continuar</button>
+                </div>
+            </section>
+        </form>
+    </div>
+{% endblock %}
+
+{% block extra_scripts %}
+    <script src="{% static 'sep24/js/profile_wizard.js' %}"></script>
+{% endblock %}

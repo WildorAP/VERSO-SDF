@@ -11,6 +11,7 @@ from django import forms
 from django.conf import settings
 from django.http import QueryDict
 from django.urls import reverse
+from django.utils import timezone
 from polaris.integrations import DepositIntegration
 from polaris.models import DeliveryMethod, Quote, Transaction
 from polaris.templates import Template
@@ -25,7 +26,7 @@ from verso_integrations.polaris_setup import (
     usdc_asset_identification,
 )
 from verso_integrations.rates import RatesError, get_pen_usdc_rate
-from verso_integrations.sep24.forms import PenDepositForm
+from verso_integrations.sep24.forms import BankTransferReceiptForm, PenDepositForm
 from verso_integrations.sep24.kyc_gate import (
     apply_verso_user_session,
     get_pending_verso_user,
@@ -34,6 +35,7 @@ from verso_integrations.sep24.kyc_gate import (
     mark_email_verified,
     mark_onboarding_login_flow,
     mark_onboarding_register_flow,
+    mark_profile_completed,
     mark_session_kyc_approved,
     onboarding_step,
     set_pending_verso_user,
@@ -43,6 +45,7 @@ from verso_integrations.sep24.onboarding_forms import (
     DiditPromptForm,
     KycStatusForm,
     VersoLoginForm,
+    VersoProfileForm,
     VersoRegisterForm,
     VersoVerifyEmailForm,
 )
@@ -97,6 +100,10 @@ class VersoDepositIntegration(DepositIntegration):
             if post_data is not None:
                 return VersoVerifyEmailForm(post_data, **form_kwargs)
             return VersoVerifyEmailForm(**form_kwargs)
+        if step == "profile":
+            if post_data is not None:
+                return VersoProfileForm(post_data, **form_kwargs)
+            return VersoProfileForm(**form_kwargs)
         if step in {"didit", "pending", "rejected"}:
             if post_data is not None:
                 return KycStatusForm(post_data)
@@ -119,8 +126,17 @@ class VersoDepositIntegration(DepositIntegration):
         *args,
         **kwargs,
     ) -> Optional[forms.Form]:
-        if Sep24DepositMeta.objects.filter(transaction=transaction).exists():
-            return None
+        try:
+            meta = transaction.verso_deposit_meta
+        except Sep24DepositMeta.DoesNotExist:
+            meta = None
+
+        if meta is not None:
+            if meta.fiat_confirmed_at or meta.transfer_declared_at:
+                return None
+            if post_data is not None:
+                return BankTransferReceiptForm(post_data, request.FILES if request else None)
+            return BankTransferReceiptForm()
 
         step = onboarding_step(request, transaction)
         return self._form_for_step(step, post_data, amount, request, transaction)
@@ -161,8 +177,16 @@ class VersoDepositIntegration(DepositIntegration):
             if synced and synced.status == "approved":
                 mark_session_kyc_approved(request, transaction.id)
             return
+        if isinstance(form, VersoProfileForm):
+            if form.profile_result is None:
+                return
+            mark_profile_completed(request, transaction.id)
+            return
         if isinstance(form, PenDepositForm):
             self._handle_pen_deposit(request, form, transaction)
+            return
+        if isinstance(form, BankTransferReceiptForm):
+            self._handle_bank_transfer_confirmation(request, form, transaction)
 
     def _handle_pen_deposit(
         self,
@@ -236,6 +260,21 @@ class VersoDepositIntegration(DepositIntegration):
         if getattr(settings, "VERSO_MOCK_AUTO_CONFIRM_FIAT", False):
             Sep24DepositMeta.objects.get(transaction=transaction).mark_fiat_confirmed()
 
+    def _handle_bank_transfer_confirmation(
+        self,
+        request: Request,
+        form: BankTransferReceiptForm,
+        transaction: Transaction,
+    ) -> None:
+        meta = Sep24DepositMeta.objects.get(transaction=transaction)
+        receipt = form.cleaned_data.get("receipt")
+        update_fields = ["transfer_declared_at", "updated_at"]
+        meta.transfer_declared_at = timezone.now()
+        if receipt:
+            meta.transfer_receipt = receipt
+            update_fields.append("transfer_receipt")
+        meta.save(update_fields=update_fields)
+
     def content_for_template(
         self,
         request: Request,
@@ -253,13 +292,19 @@ class VersoDepositIntegration(DepositIntegration):
 
         if template == Template.MORE_INFO and transaction is not None:
             meta = Sep24DepositMeta.objects.filter(transaction=transaction).first()
-            if meta:
-                base["guidance"] = _format_bank_guidance(meta.bank_instructions)
-                base["bank_instructions"] = meta.bank_instructions
             poll_query = urlencode({"id": str(transaction.id)})
             base["poll_url"] = request.build_absolute_uri(
                 f"{reverse('sep24_transaction_poll')}?{poll_query}"
             )
+            if meta:
+                base["bank_instructions"] = meta.bank_instructions
+                base["amount_pen"] = meta.amount_pen
+                base["amount_usdc"] = meta.amount_usdc
+                base["show_rail"] = True
+                base["show_timeline"] = False
+                base["receipt_uploaded"] = bool(meta.transfer_receipt)
+                base["template_name"] = "sep24/onboarding/deposit_waiting.html"
+                return base
             base["template_name"] = "polaris/more_info_verso.html"
             return base
 
@@ -294,6 +339,14 @@ class VersoDepositIntegration(DepositIntegration):
             )
             return base
 
+        if isinstance(form, VersoProfileForm):
+            base["title"] = "Completa tu perfil"
+            base["guidance"] = (
+                "Necesitamos algunos datos adicionales para cumplir con la normativa "
+                "antes de continuar con la verificación de identidad."
+            )
+            return base
+
         if isinstance(form, KycStatusForm):
             step = onboarding_step(request, transaction)
             if step == "pending":
@@ -324,14 +377,30 @@ class VersoDepositIntegration(DepositIntegration):
                 {
                     "template_name": "sep24/onboarding/deposit_amount.html",
                     "show_rail": True,
-                    "show_timeline": True,
-                    "step": 4,
+                    "show_timeline": False,
                     "wallet_short": f"{transaction.stellar_account[:8]}…",
                     "rate_venta": str(rate.rate_venta) if rate else "",
                     "rate_venta_display": (
                         f"{rate.rate_venta.quantize(Decimal('0.0001'))}" if rate else ""
                     ),
                     "rate_unavailable": rate is None,
+                }
+            )
+            return base
+
+        if isinstance(form, BankTransferReceiptForm):
+            meta = Sep24DepositMeta.objects.filter(transaction=transaction).first()
+            if not meta:
+                return None
+            base.update(
+                {
+                    "template_name": "sep24/onboarding/deposit_transfer.html",
+                    "show_rail": True,
+                    "show_timeline": False,
+                    "bank_instructions": meta.bank_instructions,
+                    "amount_pen": meta.amount_pen,
+                    "amount_usdc": meta.amount_usdc,
+                    "tipo_cambio": meta.tipo_cambio,
                 }
             )
             return base

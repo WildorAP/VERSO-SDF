@@ -3,6 +3,9 @@ from django.urls import include, path, re_path
 
 import polaris.urls
 
+from django.conf import settings
+from django.conf.urls.static import static
+
 from verso_integrations.root import root_view
 from verso_integrations.sep10 import VersoSEP10Auth
 from verso_integrations.sep24.kyc_views import kyc_callback, kyc_poll, kyc_start, onboarding_switch
@@ -25,3 +28,6 @@ urlpatterns = [
     re_path(r"^\.well-known/stellar\.toml/?$", toml_view_utf8),
     path("", include(polaris.urls)),
 ]
+
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

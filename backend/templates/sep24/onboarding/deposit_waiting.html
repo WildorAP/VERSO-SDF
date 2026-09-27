@@ -1,0 +1,68 @@
+{% extends "sep24/onboarding/_base.html" %}
+{% load static %}
+{% block title %}Procesando depósito · Anchor VERSO{% endblock %}
+
+{% block content %}
+    <h1>Transferencia registrada</h1>
+    <p class="lede">
+        {% if receipt_uploaded %}
+        Recibimos tu constancia. Estamos verificando el depósito en soles.
+        {% else %}
+        Registramos tu confirmación. Estamos verificando el depósito en soles.
+        {% endif %}
+        Te enviaremos <strong>{{ amount_usdc }} USDC</strong> en cuanto confirmemos los S/ {{ amount_pen }}.
+    </p>
+
+    <div class="transfer-summary">
+        <div class="transfer-summary__row">
+            <span>Monto enviado</span>
+            <strong>S/ {{ amount_pen }}</strong>
+        </div>
+        <div class="transfer-summary__row transfer-summary__row--highlight">
+            <span>USDC a recibir</span>
+            <strong>{{ amount_usdc }} USDC</strong>
+        </div>
+        {% if bank_instructions.reference %}
+        <div class="transfer-summary__row">
+            <span>Referencia</span>
+            <strong>{{ bank_instructions.reference }}</strong>
+        </div>
+        {% endif %}
+    </div>
+
+    <p id="deposit-wait-status" class="didit-status" role="status">
+        Verificando depósito…
+    </p>
+{% endblock %}
+
+{% block extra_scripts %}
+{% if poll_url %}
+<script>
+(function () {
+    var pollUrl = "{{ poll_url|escapejs }}";
+    var statusEl = document.getElementById("deposit-wait-status");
+
+    function poll() {
+        fetch(pollUrl, { credentials: "same-origin", headers: { Accept: "application/json" } })
+            .then(function (response) { return response.json(); })
+            .then(function (payload) {
+                if (payload.status === "completed") {
+                    if (statusEl) {
+                        statusEl.textContent = "¡Listo! USDC enviado a tu wallet.";
+                    }
+                    window.location.reload();
+                } else if (payload.status === "error") {
+                    if (statusEl) {
+                        statusEl.textContent = "Hubo un problema con tu depósito. Escríbenos a soporte@versotek.io.";
+                    }
+                }
+            })
+            .catch(function () {});
+    }
+
+    setInterval(poll, 4000);
+    poll();
+})();
+</script>
+{% endif %}
+{% endblock %}

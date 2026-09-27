@@ -14,7 +14,7 @@ from verso_integrations.polaris_setup import (
 )
 from verso_integrations.rails import VersoRailsIntegration
 from verso_integrations.rates import FiatUsdcRate
-from verso_integrations.sep24.forms import PenDepositForm
+from verso_integrations.sep24.forms import BankTransferReceiptForm, PenDepositForm
 from verso_integrations.sep24.integration import VersoDepositIntegration
 from verso_integrations.sep24.onboarding_forms import VersoLoginForm, VersoRegisterForm
 
@@ -57,7 +57,7 @@ class VersoDepositIntegrationTests(TestCase):
         )
         self.assertIsInstance(form, PenDepositForm)
 
-    def test_form_for_transaction_returns_none_after_meta_exists(self):
+    def test_form_for_transaction_returns_receipt_form_after_amount_step(self):
         Sep24DepositMeta.objects.create(
             transaction=self.transaction,
             amount_pen=Decimal("100.00"),
@@ -65,7 +65,27 @@ class VersoDepositIntegrationTests(TestCase):
             amount_usdc=Decimal("26.6666667"),
             sell_asset=pen_asset_identification(),
             buy_asset=usdc_asset_identification(),
+            bank_instructions={"account_number": "CCI-123", "reference": "TXN-1"},
         )
+        form = self.integration.form_for_transaction(
+            self.request,
+            self.transaction,
+        )
+        self.assertIsInstance(form, BankTransferReceiptForm)
+
+    def test_form_for_transaction_returns_none_after_transfer_confirmed(self):
+        meta = Sep24DepositMeta.objects.create(
+            transaction=self.transaction,
+            amount_pen=Decimal("100.00"),
+            tipo_cambio=Decimal("3.7500"),
+            amount_usdc=Decimal("26.6666667"),
+            sell_asset=pen_asset_identification(),
+            buy_asset=usdc_asset_identification(),
+        )
+        from django.utils import timezone
+
+        meta.transfer_declared_at = timezone.now()
+        meta.save(update_fields=["transfer_declared_at"])
         form = self.integration.form_for_transaction(
             self.request,
             self.transaction,
@@ -126,9 +146,10 @@ class VersoDepositIntegrationTests(TestCase):
             Template.MORE_INFO,
             transaction=self.transaction,
         )
-        self.assertIn("guidance", content)
+        self.assertEqual(content["template_name"], "sep24/onboarding/deposit_waiting.html")
         self.assertIn("bank_instructions", content)
-        self.assertIn("50.0", content["guidance"])
+        self.assertIn("poll_url", content)
+        self.assertIn("50.0", str(content["amount_pen"]))
 
     def test_content_for_template_deposit_returns_none_without_form(self):
         content = self.integration.content_for_template(
@@ -154,15 +175,18 @@ class VersoDepositIntegrationTests(TestCase):
         self.assertEqual(content["template_name"], "sep24/onboarding/deposit_amount.html")
         self.assertEqual(content["rate_venta"], "3.8100")
         self.assertEqual(content["rate_venta_display"], "3.8100")
-        self.assertEqual(content["step"], 4)
+        self.assertFalse(content["show_timeline"])
         self.assertTrue(content["show_rail"])
         self.assertFalse(content["rate_unavailable"])
 
     @override_settings(
         STORAGES={
+            "default": {
+                "BACKEND": "django.core.files.storage.FileSystemStorage",
+            },
             "staticfiles": {
                 "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
-            }
+            },
         }
     )
     @patch("verso_integrations.sep24.integration.get_pen_usdc_rate")
@@ -193,6 +217,23 @@ class VersoDepositIntegrationTests(TestCase):
         self.assertIn("Recibirás", html)
         self.assertIn("Enviar operación", html)
         self.assertIn("deposit_quote.js", html)
+        self.assertNotIn("timeline", html)
+
+    @patch("verso_integrations.sep24.integration.get_pen_usdc_rate")
+    def test_bank_transfer_confirmation_marks_declared(self, mock_rate):
+        mock_rate.return_value = FiatUsdcRate(
+            rate_venta=Decimal("3.7500"), rate_compra=Decimal("3.7000")
+        )
+        form = PenDepositForm({"amount_pen": "25.00"})
+        self.assertTrue(form.is_valid())
+        self.integration.after_form_validation(self.request, form, self.transaction)
+
+        receipt_form = BankTransferReceiptForm({})
+        self.assertTrue(receipt_form.is_valid())
+        self.integration.after_form_validation(self.request, receipt_form, self.transaction)
+
+        meta = Sep24DepositMeta.objects.get(transaction=self.transaction)
+        self.assertIsNotNone(meta.transfer_declared_at)
 
 
 @override_settings(VERSO_MOCK_KYC="not_found")

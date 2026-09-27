@@ -1,0 +1,91 @@
+{% extends "sep24/onboarding/_base.html" %}
+{% load static %}
+{% block title %}Transferencia · Anchor VERSO{% endblock %}
+
+{% block content %}
+    <h1>Realiza tu transferencia</h1>
+    <p class="lede">
+        Transfiere exactamente el monto indicado a nuestra cuenta CCI. Luego confirma
+        abajo y, si puedes, adjunta tu constancia.
+    </p>
+
+    <div class="transfer-summary">
+        <div class="transfer-summary__row">
+            <span>Monto a enviar</span>
+            <strong>S/ {{ amount_pen }}</strong>
+        </div>
+        <div class="transfer-summary__row transfer-summary__row--highlight">
+            <span>Recibirás</span>
+            <strong>{{ amount_usdc }} USDC</strong>
+        </div>
+        <div class="transfer-summary__row">
+            <span>Tipo de cambio</span>
+            <strong>S/ {{ tipo_cambio }} / USDC</strong>
+        </div>
+    </div>
+
+    <div class="transfer-card">
+        <p class="transfer-card__eyebrow">Datos para tu transferencia</p>
+
+        <div class="copy-field">
+            <div class="copy-field__label">Banco</div>
+            <div class="copy-field__value">{{ bank_instructions.bank_name }}</div>
+        </div>
+
+        <div class="copy-field">
+            <div class="copy-field__label">Titular</div>
+            <div class="copy-field__value">{{ bank_instructions.account_holder }}</div>
+        </div>
+
+        <div class="copy-field copy-field--emphasis">
+            <div class="copy-field__label">CCI</div>
+            <div class="copy-field__value copy-field__value--mono" id="cci-number">{{ bank_instructions.account_number }}</div>
+            <button type="button" class="btn-copy" data-copy-target="cci-number">Copiar CCI</button>
+        </div>
+
+        <div class="copy-field">
+            <div class="copy-field__label">Referencia (importante)</div>
+            <div class="copy-field__value copy-field__value--mono" id="transfer-reference">{{ bank_instructions.reference }}</div>
+            <button type="button" class="btn-copy" data-copy-target="transfer-reference">Copiar referencia</button>
+        </div>
+    </div>
+
+    {% if form.non_field_errors %}
+        {% for error in form.non_field_errors %}
+        <div class="error">{{ error }}</div>
+        {% endfor %}
+    {% endif %}
+
+    <form method="post" action="{{ post_url }}" enctype="multipart/form-data" class="transfer-form">
+        {% csrf_token %}
+
+        <div class="upload-zone" id="upload-zone">
+            <label for="id_receipt" class="upload-zone__label">
+                <span class="upload-zone__title">Constancia de transferencia</span>
+                <span class="upload-zone__hint">{{ form.receipt.help_text }}</span>
+                <span class="upload-zone__filename" id="upload-filename">Toca para elegir archivo</span>
+            </label>
+            <input
+                type="file"
+                name="receipt"
+                id="id_receipt"
+                class="upload-input"
+                accept="image/*,.pdf,application/pdf"
+            >
+        </div>
+        {% if form.receipt.errors %}
+            {% for error in form.receipt.errors %}
+            <p class="field-error">{{ error }}</p>
+            {% endfor %}
+        {% endif %}
+
+        <button type="submit" class="btn">Confirmar transferencia</button>
+        <p class="transfer-form__note">
+            Al confirmar, revisaremos tu depósito y te enviaremos el USDC a tu wallet.
+        </p>
+    </form>
+{% endblock %}
+
+{% block extra_scripts %}
+<script defer src="{% static 'sep24/js/deposit_transfer.js' %}"></script>
+{% endblock %}

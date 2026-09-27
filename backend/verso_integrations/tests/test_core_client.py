@@ -5,9 +5,11 @@ from django.test import TestCase, override_settings
 from verso_integrations.core_client import (
     CoreClientError,
     KycHandoffResult,
+    ProfileUpdateResult,
     kyc_handoff,
     login_user,
     register_user,
+    update_user_profile,
     user_status,
     verify_email,
 )
@@ -133,3 +135,44 @@ class CoreClientTests(TestCase):
         )
         result = kyc_handoff(user_id=7, return_url="https://anchor/callback")
         self.assertTrue(result.kyc_completed)
+
+    @patch("verso_integrations.core_client.requests.post")
+    def test_update_user_profile_success(self, mock_post):
+        mock_post.return_value = MagicMock(
+            status_code=200,
+            json=lambda: {
+                "user_id": 4,
+                "email": "a@b.com",
+                "profile_completed": True,
+                "pep_requires_manual_review": True,
+                "pep_manual_review_pending": True,
+            },
+        )
+        result = update_user_profile(
+            user_id=4,
+            profile={
+                "celular": "+51987654321",
+                "ocupacion": "Consultor",
+                "origen_fondos": "SUELDO",
+                "casado": False,
+                "es_pep": True,
+                "es_familiar_pep": False,
+            },
+        )
+        self.assertIsInstance(result, ProfileUpdateResult)
+        self.assertTrue(result.profile_completed)
+        self.assertTrue(result.pep_requires_manual_review)
+        mock_post.assert_called_once_with(
+            "https://core.example/internal/users/profile/",
+            headers={"Authorization": "Bearer test-key"},
+            json={
+                "user_id": 4,
+                "celular": "+51987654321",
+                "ocupacion": "Consultor",
+                "origen_fondos": "SUELDO",
+                "casado": False,
+                "es_pep": True,
+                "es_familiar_pep": False,
+            },
+            timeout=10,
+        )

@@ -26,9 +26,11 @@ def get_cci_deposit_instructions(
     """Return CCI/CCE bank transfer instructions for the user."""
     bank_name = getattr(settings, "VERSO_CCI_BANK_NAME", "BCP")
     account_number = getattr(settings, "VERSO_CCI_ACCOUNT_NUMBER", "XXXXXXXX")
+    account_holder = getattr(settings, "VERSO_CCI_ACCOUNT_HOLDER", "VERSO PERU")
     return {
         "bank_name": bank_name,
         "account_number": account_number,
+        "account_holder": account_holder,
         "reference": f"TXN-{client_id}",
         "amount_pen": amount_pen,
         "tipo_cambio_pen_per_usdc": tipo_cambio,

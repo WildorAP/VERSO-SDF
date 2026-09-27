@@ -13,6 +13,7 @@ from verso_integrations.sep24.kyc_gate import (
     KYC_REJECTED,
     lookup_client_kyc,
     mark_email_verified,
+    mark_profile_completed,
     mark_session_kyc_approved,
     mark_wants_register,
     onboarding_step,
@@ -131,7 +132,7 @@ class OnboardingStepTests(TestCase):
         self.assertEqual(onboarding_step(self.request, self.transaction), "verify_email")
 
     @override_settings(VERSO_MOCK_KYC="not_found")
-    def test_after_verify_goes_to_didit(self):
+    def test_after_verify_goes_to_profile(self):
         set_pending_verso_user(
             self.request,
             self.transaction.id,
@@ -139,6 +140,18 @@ class OnboardingStepTests(TestCase):
             email="user@example.com",
         )
         mark_email_verified(self.request, self.transaction.id)
+        self.assertEqual(onboarding_step(self.request, self.transaction), "profile")
+
+    @override_settings(VERSO_MOCK_KYC="not_found")
+    def test_after_profile_goes_to_didit(self):
+        set_pending_verso_user(
+            self.request,
+            self.transaction.id,
+            user_id=7,
+            email="user@example.com",
+        )
+        mark_email_verified(self.request, self.transaction.id)
+        mark_profile_completed(self.request, self.transaction.id)
         self.assertEqual(onboarding_step(self.request, self.transaction), "didit")
 
     @override_settings(VERSO_MOCK_KYC="pending")

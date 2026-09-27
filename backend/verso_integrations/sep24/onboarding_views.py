@@ -30,6 +30,7 @@ from verso_integrations.sep24.kyc_views import (
 
 from verso_integrations.sep24.onboarding_forms import (
     VersoLoginForm,
+    VersoProfileForm,
     VersoRegisterForm,
     VersoVerifyEmailForm,
 )
@@ -38,6 +39,7 @@ STEP_NUMBERS = {
     "login": 1,
     "register": 1,
     "verify_email": 2,
+    "profile": 2,
     "didit": 3,
     "pending": 3,
     "rejected": 3,
@@ -94,6 +96,7 @@ def sep24_onboarding(request: HttpRequest) -> HttpResponse:
 
     integration = VersoDepositIntegration()
     error = None
+    profile_form = None
 
     if request.method == "POST":
         if step == "login":
@@ -114,8 +117,14 @@ def sep24_onboarding(request: HttpRequest) -> HttpResponse:
                 integration.after_form_validation(drf_request, form, transaction)
                 return redirect(onboarding_url(request, transaction))
             error = _first_form_error(form)
+        elif step == "profile":
+            profile_form = VersoProfileForm(request.POST, request=drf_request, transaction=transaction)
+            if profile_form.is_valid():
+                integration.after_form_validation(drf_request, profile_form, transaction)
+                return redirect(onboarding_url(request, transaction))
+            error = _first_form_error(profile_form)
 
-    return _render_step(request, transaction, step, error=error)
+    return _render_step(request, transaction, step, error=error, profile_form=profile_form)
 
 
 def _first_form_error(form) -> str:
@@ -133,6 +142,7 @@ def _render_step(
     step: str,
     *,
     error: str | None = None,
+    profile_form: VersoProfileForm | None = None,
 ) -> HttpResponse:
     step_number = STEP_NUMBERS.get(step, 1)
     wallet_short = f"{transaction.stellar_account[:8]}…"
@@ -160,6 +170,15 @@ def _render_step(
         _user_id, email = get_pending_verso_user(request, transaction.id)
         context["email"] = email or ""
         return render(request, "sep24/onboarding/verify_email.html", context)
+    if step == "profile":
+        context["show_timeline"] = False
+        if profile_form is None:
+            profile_form = VersoProfileForm(
+                request=_as_drf_request(request),
+                transaction=transaction,
+            )
+        context["form"] = profile_form
+        return render(request, "sep24/onboarding/profile_wizard.html", context)
     if step == "didit":
         _user_id, email = get_pending_verso_user(request, transaction.id)
         context["email"] = email or ""

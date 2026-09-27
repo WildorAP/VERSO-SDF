@@ -147,10 +147,11 @@ class Sep24DepositMetaAdmin(admin.ModelAdmin):
         "amount_pen",
         "tipo_cambio",
         "amount_usdc",
+        "transfer_declared_at",
         "fiat_confirmed_at",
         "created_at",
     )
-    list_filter = ("fiat_confirmed_at",)
+    list_filter = ("fiat_confirmed_at", "transfer_declared_at")
     search_fields = ("transaction__id", "transaction__stellar_account")
     readonly_fields = (
         "transaction",
@@ -160,6 +161,8 @@ class Sep24DepositMetaAdmin(admin.ModelAdmin):
         "sell_asset",
         "buy_asset",
         "bank_instructions",
+        "transfer_receipt",
+        "transfer_declared_at",
         "fiat_confirmed_at",
         "created_at",
         "updated_at",

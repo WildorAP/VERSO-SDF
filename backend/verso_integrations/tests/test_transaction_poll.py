@@ -62,6 +62,9 @@ class TransactionPollViewTests(TestCase):
 @override_settings(
     VERSO_MOCK_KYC="approved",
     STORAGES={
+        "default": {
+            "BACKEND": "django.core.files.storage.FileSystemStorage",
+        },
         "staticfiles": {
             "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
         }
@@ -93,9 +96,49 @@ class MoreInfoAutoRefreshTests(TestCase):
             Template.MORE_INFO,
             transaction=self.transaction,
         )
-        self.assertEqual(content["template_name"], "polaris/more_info_verso.html")
+        self.assertEqual(content["template_name"], "sep24/onboarding/deposit_waiting.html")
         self.assertIn("/sep24/transaction/poll/", content["poll_url"])
         self.assertIn(str(self.transaction.id), content["poll_url"])
+
+    @patch("verso_integrations.sep24.integration.get_pen_usdc_rate")
+    def test_transfer_template_renders_cci_copy_fields(self, mock_rate):
+        from django.template.loader import render_to_string
+        from verso_integrations.models import Sep24DepositMeta
+        from verso_integrations.polaris_setup import pen_asset_identification, usdc_asset_identification
+        from verso_integrations.rates import FiatUsdcRate
+        from verso_integrations.sep24.forms import BankTransferReceiptForm
+
+        mock_rate.return_value = FiatUsdcRate(
+            rate_venta=Decimal("3.7500"), rate_compra=Decimal("3.7000")
+        )
+        Sep24DepositMeta.objects.create(
+            transaction=self.transaction,
+            amount_pen=Decimal("50.00"),
+            tipo_cambio=Decimal("3.7500"),
+            amount_usdc=Decimal("13.3333333"),
+            sell_asset=pen_asset_identification(),
+            buy_asset=usdc_asset_identification(),
+            bank_instructions={
+                "bank_name": "BCP",
+                "account_holder": "VERSO PERU",
+                "account_number": "00212345678901234567890",
+                "reference": f"TXN-{self.transaction.id}",
+            },
+        )
+        form = BankTransferReceiptForm()
+        content = self.integration.content_for_template(
+            self.request,
+            Template.DEPOSIT,
+            form=form,
+            transaction=self.transaction,
+        )
+        html = render_to_string(
+            content["template_name"],
+            {**content, "form": form, "post_url": "/sep24/transactions/deposit/webapp/submit/"},
+        )
+        self.assertIn("00212345678901234567890", html)
+        self.assertIn("Copiar CCI", html)
+        self.assertIn("Confirmar transferencia", html)
 
     def test_more_info_page_includes_poll_script_for_pending_transaction(self):
         response = self.client.get(
