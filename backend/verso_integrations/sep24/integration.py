@@ -26,7 +26,11 @@ from verso_integrations.polaris_setup import (
     usdc_asset_identification,
 )
 from verso_integrations.rates import RatesError, get_pen_usdc_rate
-from verso_integrations.sep24.forms import BankTransferReceiptForm, PenDepositForm
+from verso_integrations.sep24.forms import (
+    BankTransferReceiptForm,
+    PenDepositForm,
+    TransferAlreadyDeclaredForm,
+)
 from verso_integrations.sep24.kyc_gate import (
     apply_verso_user_session,
     get_pending_verso_user,
@@ -71,6 +75,40 @@ def _onboarding_switch_url(request: Request, transaction: Transaction, mode: str
     query = urlencode({"transaction_id": str(transaction.id), "mode": mode})
     path = reverse("sep24_onboarding_switch")
     return request.build_absolute_uri(f"{path}?{query}")
+
+
+def _deposit_waiting_content(request: Request, transaction: Transaction, meta: Sep24DepositMeta, base: dict) -> dict:
+    poll_query = urlencode({"id": str(transaction.id)})
+    base.update(
+        {
+            "bank_instructions": meta.bank_instructions,
+            "amount_pen": meta.amount_pen,
+            "amount_usdc": meta.amount_usdc,
+            "show_rail": True,
+            "show_timeline": False,
+            "receipt_uploaded": bool(meta.transfer_receipt),
+            "poll_url": request.build_absolute_uri(
+                f"{reverse('sep24_transaction_poll')}?{poll_query}"
+            ),
+            "template_name": "sep24/onboarding/deposit_waiting.html",
+        }
+    )
+    return base
+
+
+def _deposit_transfer_content(meta: Sep24DepositMeta, base: dict) -> dict:
+    base.update(
+        {
+            "template_name": "sep24/onboarding/deposit_transfer.html",
+            "show_rail": True,
+            "show_timeline": False,
+            "bank_instructions": meta.bank_instructions,
+            "amount_pen": meta.amount_pen,
+            "amount_usdc": meta.amount_usdc,
+            "tipo_cambio": meta.tipo_cambio,
+        }
+    )
+    return base
 
 
 class VersoDepositIntegration(DepositIntegration):
@@ -133,6 +171,8 @@ class VersoDepositIntegration(DepositIntegration):
 
         if meta is not None:
             if meta.fiat_confirmed_at or meta.transfer_declared_at:
+                if post_data is not None:
+                    return TransferAlreadyDeclaredForm(post_data)
                 return None
             if post_data is not None:
                 return BankTransferReceiptForm(post_data, request.FILES if request else None)
@@ -187,6 +227,9 @@ class VersoDepositIntegration(DepositIntegration):
             return
         if isinstance(form, BankTransferReceiptForm):
             self._handle_bank_transfer_confirmation(request, form, transaction)
+            return
+        if isinstance(form, TransferAlreadyDeclaredForm):
+            return
 
     def _handle_pen_deposit(
         self,
@@ -267,13 +310,12 @@ class VersoDepositIntegration(DepositIntegration):
         transaction: Transaction,
     ) -> None:
         meta = Sep24DepositMeta.objects.get(transaction=transaction)
-        receipt = form.cleaned_data.get("receipt")
-        update_fields = ["transfer_declared_at", "updated_at"]
+        receipt = form.cleaned_data["receipt"]
         meta.transfer_declared_at = timezone.now()
-        if receipt:
-            meta.transfer_receipt = receipt
-            update_fields.append("transfer_receipt")
-        meta.save(update_fields=update_fields)
+        meta.transfer_receipt = receipt
+        meta.save(
+            update_fields=["transfer_declared_at", "transfer_receipt", "updated_at"]
+        )
 
     def content_for_template(
         self,
@@ -290,21 +332,19 @@ class VersoDepositIntegration(DepositIntegration):
             "title": "Depósito PEN → USDC",
         }
 
-        if template == Template.MORE_INFO and transaction is not None:
+        if transaction is not None:
             meta = Sep24DepositMeta.objects.filter(transaction=transaction).first()
-            poll_query = urlencode({"id": str(transaction.id)})
-            base["poll_url"] = request.build_absolute_uri(
-                f"{reverse('sep24_transaction_poll')}?{poll_query}"
-            )
             if meta:
-                base["bank_instructions"] = meta.bank_instructions
-                base["amount_pen"] = meta.amount_pen
-                base["amount_usdc"] = meta.amount_usdc
-                base["show_rail"] = True
-                base["show_timeline"] = False
-                base["receipt_uploaded"] = bool(meta.transfer_receipt)
-                base["template_name"] = "sep24/onboarding/deposit_waiting.html"
-                return base
+                if meta.transfer_declared_at or meta.fiat_confirmed_at:
+                    if template in {Template.MORE_INFO, Template.DEPOSIT}:
+                        return _deposit_waiting_content(request, transaction, meta, base)
+                elif form is None and template == Template.DEPOSIT:
+                    return _deposit_transfer_content(meta, base)
+
+        if template == Template.MORE_INFO and transaction is not None:
+            base["poll_url"] = request.build_absolute_uri(
+                f"{reverse('sep24_transaction_poll')}?{urlencode({'id': str(transaction.id)})}"
+            )
             base["template_name"] = "polaris/more_info_verso.html"
             return base
 
@@ -392,17 +432,6 @@ class VersoDepositIntegration(DepositIntegration):
             meta = Sep24DepositMeta.objects.filter(transaction=transaction).first()
             if not meta:
                 return None
-            base.update(
-                {
-                    "template_name": "sep24/onboarding/deposit_transfer.html",
-                    "show_rail": True,
-                    "show_timeline": False,
-                    "bank_instructions": meta.bank_instructions,
-                    "amount_pen": meta.amount_pen,
-                    "amount_usdc": meta.amount_usdc,
-                    "tipo_cambio": meta.tipo_cambio,
-                }
-            )
-            return base
+            return _deposit_transfer_content(meta, base)
 
         return None

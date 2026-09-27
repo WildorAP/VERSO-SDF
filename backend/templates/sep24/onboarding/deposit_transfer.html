@@ -5,8 +5,8 @@
 {% block content %}
     <h1>Realiza tu transferencia</h1>
     <p class="lede">
-        Transfiere exactamente el monto indicado a nuestra cuenta CCI. Luego confirma
-        abajo y, si puedes, adjunta tu constancia.
+        Transfiere exactamente el monto indicado a nuestra cuenta CCI. Luego adjunta
+        la constancia de tu transferencia para confirmar la operación.
     </p>
 
     <div class="transfer-summary">
@@ -61,7 +61,7 @@
 
         <div class="upload-zone" id="upload-zone">
             <label for="id_receipt" class="upload-zone__label">
-                <span class="upload-zone__title">Constancia de transferencia</span>
+                <span class="upload-zone__title">Constancia de transferencia *</span>
                 <span class="upload-zone__hint">{{ form.receipt.help_text }}</span>
                 <span class="upload-zone__filename" id="upload-filename">Toca para elegir archivo</span>
             </label>
@@ -71,6 +71,7 @@
                 id="id_receipt"
                 class="upload-input"
                 accept="image/*,.pdf,application/pdf"
+                required
             >
         </div>
         {% if form.receipt.errors %}
@@ -79,7 +80,7 @@
             {% endfor %}
         {% endif %}
 
-        <button type="submit" class="btn">Confirmar transferencia</button>
+        <button type="submit" class="btn" id="transfer-submit" disabled>Confirmar transferencia</button>
         <p class="transfer-form__note">
             Al confirmar, revisaremos tu depósito y te enviaremos el USDC a tu wallet.
         </p>

@@ -28,12 +28,12 @@ class PenDepositForm(forms.Form):
 
 
 class BankTransferReceiptForm(forms.Form):
-    """Confirm PEN bank transfer and optionally upload voucher."""
+    """Confirm PEN bank transfer with mandatory voucher upload."""
 
     receipt = forms.FileField(
         label="Constancia de transferencia",
-        required=False,
-        help_text="Foto o PDF de tu voucher (opcional, acelera la verificación).",
+        required=True,
+        help_text="Sube la foto o PDF de tu voucher bancario (JPG, PNG o PDF, máx. 10 MB).",
         widget=forms.ClearableFileInput(
             attrs={
                 "accept": "image/*,.pdf,application/pdf",
@@ -45,7 +45,7 @@ class BankTransferReceiptForm(forms.Form):
     def clean_receipt(self):
         receipt = self.cleaned_data.get("receipt")
         if not receipt:
-            return None
+            raise ValidationError("Debes adjuntar la constancia de tu transferencia.")
         if receipt.size > MAX_RECEIPT_BYTES:
             raise ValidationError("El archivo no puede superar 10 MB.")
         content_type = getattr(receipt, "content_type", "") or ""
@@ -56,3 +56,9 @@ class BankTransferReceiptForm(forms.Form):
         ):
             raise ValidationError("Sube una imagen (JPG, PNG) o un PDF.")
         return receipt
+
+
+class TransferAlreadyDeclaredForm(forms.Form):
+    """No-op form so duplicate POSTs after confirming transfer do not 422."""
+
+    acknowledge = forms.CharField(required=False, widget=forms.HiddenInput)

@@ -640,6 +640,11 @@ input:focus-visible {
   cursor: pointer;
 }
 
+.transfer-form .btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .transfer-form__note {
   margin: 0.85rem 0 0;
   font-size: 0.82rem;

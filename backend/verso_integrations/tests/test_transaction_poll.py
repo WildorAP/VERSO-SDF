@@ -7,6 +7,7 @@ from polaris.models import Asset, Transaction
 from polaris.templates import Template
 from stellar_sdk import Keypair
 
+from verso_integrations.models import Sep24DepositMeta
 from verso_integrations.polaris_setup import seed_polaris_t2
 from verso_integrations.sep24.integration import VersoDepositIntegration
 
@@ -90,6 +91,11 @@ class MoreInfoAutoRefreshTests(TestCase):
         form = PenDepositForm({"amount_pen": "50.00"})
         self.assertTrue(form.is_valid())
         self.integration.after_form_validation(self.request, form, self.transaction)
+        meta = Sep24DepositMeta.objects.get(transaction=self.transaction)
+        from django.utils import timezone
+
+        meta.transfer_declared_at = timezone.now()
+        meta.save(update_fields=["transfer_declared_at"])
 
         content = self.integration.content_for_template(
             self.request,

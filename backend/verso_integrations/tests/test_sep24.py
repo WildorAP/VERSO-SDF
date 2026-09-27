@@ -1,6 +1,8 @@
 from decimal import Decimal
+from io import BytesIO
 from unittest.mock import MagicMock, patch
 
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from polaris.models import Asset, DeliveryMethod, Quote, Transaction
 from polaris.templates import Template
@@ -140,6 +142,11 @@ class VersoDepositIntegrationTests(TestCase):
         form = PenDepositForm({"amount_pen": "50.00"})
         self.assertTrue(form.is_valid())
         self.integration.after_form_validation(self.request, form, self.transaction)
+        meta = Sep24DepositMeta.objects.get(transaction=self.transaction)
+        from django.utils import timezone
+
+        meta.transfer_declared_at = timezone.now()
+        meta.save(update_fields=["transfer_declared_at"])
 
         content = self.integration.content_for_template(
             self.request,
@@ -159,6 +166,48 @@ class VersoDepositIntegrationTests(TestCase):
             transaction=self.transaction,
         )
         self.assertIsNone(content)
+
+    def test_content_for_template_deposit_waiting_after_transfer_without_form(self):
+        from django.utils import timezone
+
+        Sep24DepositMeta.objects.create(
+            transaction=self.transaction,
+            amount_pen=Decimal("100.00"),
+            tipo_cambio=Decimal("3.7500"),
+            amount_usdc=Decimal("26.6666667"),
+            sell_asset=pen_asset_identification(),
+            buy_asset=usdc_asset_identification(),
+            bank_instructions={"account_number": "CCI-123", "reference": "TXN-1"},
+            transfer_declared_at=timezone.now(),
+        )
+        content = self.integration.content_for_template(
+            self.request,
+            Template.DEPOSIT,
+            form=None,
+            transaction=self.transaction,
+        )
+        self.assertEqual(content["template_name"], "sep24/onboarding/deposit_waiting.html")
+
+    def test_form_for_transaction_accepts_duplicate_post_after_transfer(self):
+        from django.utils import timezone
+
+        Sep24DepositMeta.objects.create(
+            transaction=self.transaction,
+            amount_pen=Decimal("100.00"),
+            tipo_cambio=Decimal("3.7500"),
+            amount_usdc=Decimal("26.6666667"),
+            sell_asset=pen_asset_identification(),
+            buy_asset=usdc_asset_identification(),
+            transfer_declared_at=timezone.now(),
+        )
+        from verso_integrations.sep24.forms import TransferAlreadyDeclaredForm
+
+        form = self.integration.form_for_transaction(
+            self.request,
+            self.transaction,
+            post_data={"acknowledge": ""},
+        )
+        self.assertIsInstance(form, TransferAlreadyDeclaredForm)
 
     @patch("verso_integrations.sep24.integration.get_pen_usdc_rate")
     def test_content_for_template_deposit_includes_rate_and_custom_template(self, mock_rate):
@@ -219,6 +268,11 @@ class VersoDepositIntegrationTests(TestCase):
         self.assertIn("deposit_quote.js", html)
         self.assertNotIn("timeline", html)
 
+    def test_bank_transfer_receipt_form_requires_file(self):
+        form = BankTransferReceiptForm({})
+        self.assertFalse(form.is_valid())
+        self.assertIn("receipt", form.errors)
+
     @patch("verso_integrations.sep24.integration.get_pen_usdc_rate")
     def test_bank_transfer_confirmation_marks_declared(self, mock_rate):
         mock_rate.return_value = FiatUsdcRate(
@@ -228,12 +282,18 @@ class VersoDepositIntegrationTests(TestCase):
         self.assertTrue(form.is_valid())
         self.integration.after_form_validation(self.request, form, self.transaction)
 
-        receipt_form = BankTransferReceiptForm({})
+        receipt = SimpleUploadedFile(
+            "voucher.pdf",
+            b"%PDF-1.4 test receipt",
+            content_type="application/pdf",
+        )
+        receipt_form = BankTransferReceiptForm({}, {"receipt": receipt})
         self.assertTrue(receipt_form.is_valid())
         self.integration.after_form_validation(self.request, receipt_form, self.transaction)
 
         meta = Sep24DepositMeta.objects.get(transaction=self.transaction)
         self.assertIsNotNone(meta.transfer_declared_at)
+        self.assertTrue(meta.transfer_receipt)
 
 
 @override_settings(VERSO_MOCK_KYC="not_found")

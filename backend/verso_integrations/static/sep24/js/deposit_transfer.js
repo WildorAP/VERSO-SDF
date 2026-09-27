@@ -25,12 +25,34 @@
   var fileInput = document.getElementById("id_receipt");
   var filenameEl = document.getElementById("upload-filename");
   var uploadZone = document.getElementById("upload-zone");
-  if (fileInput && filenameEl) {
-    fileInput.addEventListener("change", function () {
-      var file = fileInput.files && fileInput.files[0];
+  var submitBtn = document.getElementById("transfer-submit");
+  var transferForm = document.querySelector(".transfer-form");
+
+  function syncReceiptState() {
+    var file = fileInput && fileInput.files && fileInput.files[0];
+    if (filenameEl) {
       filenameEl.textContent = file ? file.name : "Toca para elegir archivo";
-      if (uploadZone) {
-        uploadZone.classList.toggle("is-filled", Boolean(file));
+    }
+    if (uploadZone) {
+      uploadZone.classList.toggle("is-filled", Boolean(file));
+    }
+    if (submitBtn) {
+      submitBtn.disabled = !file;
+    }
+  }
+
+  if (fileInput) {
+    fileInput.addEventListener("change", syncReceiptState);
+    syncReceiptState();
+  }
+
+  if (transferForm && fileInput) {
+    transferForm.addEventListener("submit", function (event) {
+      if (!fileInput.files || !fileInput.files[0]) {
+        event.preventDefault();
+        fileInput.setCustomValidity("Debes adjuntar la constancia de tu transferencia.");
+        fileInput.reportValidity();
+        fileInput.setCustomValidity("");
       }
     });
   }
