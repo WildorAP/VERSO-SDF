@@ -139,6 +139,61 @@ class VersoDepositIntegrationTests(TestCase):
         )
         self.assertIsNone(content)
 
+    @patch("verso_integrations.sep24.integration.get_pen_usdc_rate")
+    def test_content_for_template_deposit_includes_rate_and_custom_template(self, mock_rate):
+        mock_rate.return_value = FiatUsdcRate(
+            rate_venta=Decimal("3.8100"), rate_compra=Decimal("3.7900")
+        )
+        form = PenDepositForm()
+        content = self.integration.content_for_template(
+            self.request,
+            Template.DEPOSIT,
+            form=form,
+            transaction=self.transaction,
+        )
+        self.assertEqual(content["template_name"], "sep24/onboarding/deposit_amount.html")
+        self.assertEqual(content["rate_venta"], "3.8100")
+        self.assertEqual(content["rate_venta_display"], "3.8100")
+        self.assertEqual(content["step"], 4)
+        self.assertTrue(content["show_rail"])
+        self.assertFalse(content["rate_unavailable"])
+
+    @override_settings(
+        STORAGES={
+            "staticfiles": {
+                "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+            }
+        }
+    )
+    @patch("verso_integrations.sep24.integration.get_pen_usdc_rate")
+    def test_deposit_amount_template_renders_quote_panel(self, mock_rate):
+        from django.template.loader import render_to_string
+
+        mock_rate.return_value = FiatUsdcRate(
+            rate_venta=Decimal("3.7500"), rate_compra=Decimal("3.7000")
+        )
+        form = PenDepositForm()
+        content = self.integration.content_for_template(
+            self.request,
+            Template.DEPOSIT,
+            form=form,
+            transaction=self.transaction,
+        )
+        html = render_to_string(
+            content["template_name"],
+            {
+                **content,
+                "form": form,
+                "post_url": "/sep24/transactions/deposit/webapp/submit/?transaction_id=tx1",
+            },
+        )
+        self.assertIn("Tipo de cambio vigente", html)
+        self.assertIn("S/ 3.7500 por 1 USDC", html)
+        self.assertIn("Enviarás", html)
+        self.assertIn("Recibirás", html)
+        self.assertIn("Enviar operación", html)
+        self.assertIn("deposit_quote.js", html)
+
 
 @override_settings(VERSO_MOCK_KYC="not_found")
 class VersoDepositOnboardingGateTests(TestCase):

@@ -29,6 +29,10 @@
                     <span class="timeline__dot" aria-hidden="true"></span>
                     <span class="timeline__label">Verificación DIDIT</span>
                 </li>
+                <li class="timeline__step {% if step > 4 %}is-done{% elif step == 4 %}is-current{% endif %}">
+                    <span class="timeline__dot" aria-hidden="true"></span>
+                    <span class="timeline__label">Depósito</span>
+                </li>
             </ol>
             {% endif %}
         </header>

@@ -12,4 +12,12 @@ class PenDepositForm(forms.Form):
         max_digits=18,
         decimal_places=2,
         help_text="Ingresa el monto que transferirás por CCI/CCE.",
+        widget=forms.TextInput(
+            attrs={
+                "id": "id_amount_pen",
+                "inputmode": "decimal",
+                "placeholder": "0.00",
+                "autocomplete": "off",
+            }
+        ),
     )

@@ -24,7 +24,7 @@ from verso_integrations.polaris_setup import (
     pen_asset_identification,
     usdc_asset_identification,
 )
-from verso_integrations.rates import get_pen_usdc_rate
+from verso_integrations.rates import RatesError, get_pen_usdc_rate
 from verso_integrations.sep24.forms import PenDepositForm
 from verso_integrations.sep24.kyc_gate import (
     apply_verso_user_session,
@@ -316,9 +316,23 @@ class VersoDepositIntegration(DepositIntegration):
             return base
 
         if isinstance(form, PenDepositForm):
-            base["guidance"] = (
-                "Ingresa el monto en soles peruanos. Te mostraremos las "
-                "instrucciones de transferencia CCI/CCE y el USDC a recibir."
+            try:
+                rate = get_pen_usdc_rate()
+            except RatesError:
+                rate = None
+            base.update(
+                {
+                    "template_name": "sep24/onboarding/deposit_amount.html",
+                    "show_rail": True,
+                    "show_timeline": True,
+                    "step": 4,
+                    "wallet_short": f"{transaction.stellar_account[:8]}…",
+                    "rate_venta": str(rate.rate_venta) if rate else "",
+                    "rate_venta_display": (
+                        f"{rate.rate_venta.quantize(Decimal('0.0001'))}" if rate else ""
+                    ),
+                    "rate_unavailable": rate is None,
+                }
             )
             return base
 
