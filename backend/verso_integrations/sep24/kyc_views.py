@@ -5,20 +5,26 @@ SEP-24 DIDIT redirect helpers (Etapa 4).
 from __future__ import annotations
 
 import json
-import os
+import time
 from dataclasses import dataclass
 from decimal import Decimal
 from urllib.parse import urlencode
 
+import jwt
 from django.conf import settings
 from django.http import HttpRequest, HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from polaris import settings as polaris_settings
 from polaris.models import Transaction
-from polaris.sep24.utils import interactive_url
-from rest_framework.request import Request
 
-from verso_integrations.core_client import CoreClientError, kyc_handoff, sync_kyc, user_status
+from verso_integrations.core_client import (
+    CoreClientError,
+    UserStatusResult,
+    kyc_handoff,
+    sync_kyc,
+    user_status,
+)
 from verso_integrations.sep24.kyc_gate import (
     clear_wants_register,
     get_pending_verso_user,
@@ -30,8 +36,7 @@ from verso_integrations.sep24.kyc_gate import (
 )
 
 
-def _as_drf_request(request: HttpRequest) -> Request:
-    return Request(request)
+SEP24_INTERACTIVE_DEPOSIT_PATH = "/sep24/transactions/deposit/interactive"
 
 
 def _build_return_url(request: HttpRequest, transaction: Transaction) -> str:
@@ -40,25 +45,38 @@ def _build_return_url(request: HttpRequest, transaction: Transaction) -> str:
     return request.build_absolute_uri(f"{callback}?{query}")
 
 
+def _sep24_interactive_jwt(request: HttpRequest, transaction: Transaction) -> str:
+    """
+    Polaris validates JWT ``iss`` against ``/sep24/transactions/deposit/interactive``,
+    but ``interactive_url()`` would use the current request path (e.g. kyc/callback).
+    """
+    issued_at = int(time.time()) - 1
+    account = transaction.stellar_account
+    memo = transaction.account_memo
+    sub = f"{account}:{memo}" if memo else account
+    payload = {
+        "iss": request.build_absolute_uri(SEP24_INTERACTIVE_DEPOSIT_PATH),
+        "iat": issued_at,
+        "exp": issued_at + polaris_settings.INTERACTIVE_JWT_EXPIRATION,
+        "sub": sub,
+        "jti": str(transaction.id),
+    }
+    return jwt.encode(payload, polaris_settings.SERVER_JWT_KEY, algorithm="HS256")
+
+
 def _webapp_url(request: HttpRequest, transaction: Transaction) -> str:
-    drf_request = _as_drf_request(request)
     amount = transaction.amount_in or transaction.amount_out
     if amount is not None and amount <= Decimal("0"):
         amount = None
-    url = interactive_url(
-        request=drf_request,
-        transaction_id=str(transaction.id),
-        account=transaction.stellar_account,
-        memo=transaction.account_memo,
-        asset_code=transaction.asset.code,
-        op_type="deposit",
-        amount=amount,
-        lang=None,
-    )
-    if not url:
-        host = os.environ.get("HOST_URL", "http://localhost:8000").rstrip("/")
-        return f"{host}/sep24/transactions/deposit/webapp?transaction_id={transaction.id}"
-    return url
+    params = {
+        "asset_code": transaction.asset.code,
+        "transaction_id": str(transaction.id),
+        "token": _sep24_interactive_jwt(request, transaction),
+    }
+    if amount is not None:
+        params["amount"] = amount
+    qparams = urlencode(params)
+    return request.build_absolute_uri(f"{reverse('get_interactive_deposit')}?{qparams}")
 
 
 def _load_deposit_transaction(request: HttpRequest, transaction_id: str | None) -> Transaction:

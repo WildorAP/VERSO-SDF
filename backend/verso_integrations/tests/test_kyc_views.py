@@ -1,6 +1,9 @@
 from unittest.mock import patch
+from urllib.parse import parse_qs, urlparse
 
+import jwt
 from django.test import Client, TestCase, override_settings
+from polaris import settings as polaris_settings
 from polaris.models import Asset, Transaction
 from stellar_sdk import Keypair
 
@@ -135,6 +138,32 @@ class KycViewTests(TestCase):
         self.assertIn("/sep24/transactions/deposit/webapp", response["Location"])
         session_key = f"sep24:{self.transaction.id}:kyc_approved"
         self.assertTrue(self.client.session.get(session_key))
+
+    @patch("verso_integrations.sep24.kyc_views._refresh_kyc_status")
+    def test_kyc_callback_webapp_token_uses_interactive_issuer(self, mock_refresh):
+        mock_refresh.return_value = UserStatusResult(
+            user_id=42,
+            email="user@example.com",
+            kyc_completed=True,
+        )
+        response = self.client.get(
+            f"/sep24/kyc/callback/?transaction_id={self.transaction.id}"
+        )
+        redirect_url = response["Location"]
+        token = parse_qs(urlparse(redirect_url).query)["token"][0]
+        payload = jwt.decode(
+            token,
+            polaris_settings.SERVER_JWT_KEY,
+            algorithms=["HS256"],
+        )
+        self.assertEqual(
+            payload["iss"],
+            "http://testserver/sep24/transactions/deposit/interactive",
+        )
+        self.assertEqual(payload["jti"], str(self.transaction.id))
+
+        webapp_response = self.client.get(redirect_url)
+        self.assertNotEqual(webapp_response.status_code, 403)
 
     def test_kyc_start_requires_onboarding_session(self):
         client = Client()
