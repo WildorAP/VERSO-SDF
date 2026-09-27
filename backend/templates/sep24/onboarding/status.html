@@ -1,0 +1,10 @@
+{% extends "sep24/onboarding/_base.html" %}
+{% block title %}Estado de verificación · Anchor VERSO{% endblock %}
+
+{% block content %}
+    <h1>Verificación de identidad</h1>
+    <p class="lede">{{ status_message }}</p>
+    <p class="auth-switch">
+        <a href="{{ webapp_url }}">Volver al depósito</a>
+    </p>
+{% endblock %}

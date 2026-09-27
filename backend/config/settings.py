@@ -3,11 +3,13 @@ Django settings for VERSO Stellar Anchor (Polaris).
 """
 
 import os
+import sys
 from pathlib import Path
 
 import environ
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+TESTING = len(sys.argv) > 1 and sys.argv[1] == "test"
 
 env = environ.Env(
     # Fail-safe: si la variable DEBUG falta o no parsea, se asume producción.
@@ -56,6 +58,7 @@ MIDDLEWARE = [
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
+    "verso_integrations.sep24.onboarding_middleware.Sep24OnboardingMiddleware",
     "polaris.middleware.TimezoneMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -129,13 +132,31 @@ VERSO_QUOTE_TTL_SECONDS = env.int("VERSO_QUOTE_TTL_SECONDS", default=900)
 # SEP-24 CCI deposit instructions (Etapa 3+).
 VERSO_CCI_BANK_NAME = env("VERSO_CCI_BANK_NAME", default="BCP")
 VERSO_CCI_ACCOUNT_NUMBER = env("VERSO_CCI_ACCOUNT_NUMBER", default="XXXXXXXX")
+VERSO_CCI_ACCOUNT_HOLDER = env("VERSO_CCI_ACCOUNT_HOLDER", default="VERSO PERU")
+
+LOCAL_MODE = env.bool("LOCAL_MODE", default=False)
 
 # Test-only: auto-confirm PEN after webview form (never enable in production).
 VERSO_MOCK_AUTO_CONFIRM_FIAT = env.bool("VERSO_MOCK_AUTO_CONFIRM_FIAT", default=False)
 
-# Redis — SEP-24 session/cache (T2). Falls back to DB sessions when unset.
+# Etapa 4 — KYC gate (empty = live Core lookup). Values: approved|not_found|pending|rejected
+VERSO_MOCK_KYC = env("VERSO_MOCK_KYC", default="")
+
+# Local/dev: after email verification, skip DIDIT and allow deposit (session override).
+VERSO_MOCK_KYC_AUTO_APPROVE_AFTER_VERIFY = env.bool(
+    "VERSO_MOCK_KYC_AUTO_APPROVE_AFTER_VERIFY",
+    default=LOCAL_MODE,
+)
+
+# Origins allowed for DIDIT iframe postMessage (verify + legacy verification host).
+DIDIT_EMBED_ORIGINS = [
+    "https://verify.didit.me",
+    "https://verification.didit.me",
+]
+
+# Redis — SEP-24 session/cache (T2). Falls back to DB sessions when unset or during tests.
 REDIS_URL = env("REDIS_URL", default="")
-if REDIS_URL:
+if REDIS_URL and not TESTING:
     CACHES = {
         "default": {
             "BACKEND": "django.core.cache.backends.redis.RedisCache",

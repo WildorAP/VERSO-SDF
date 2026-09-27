@@ -1,0 +1,10 @@
+{% extends "polaris/deposit.html" %}
+
+{% block "form" %}
+  {% if form.non_field_errors %}
+    {% for error in form.non_field_errors %}
+      <p class="help is-danger"><strong>{{ error }}</strong></p>
+    {% endfor %}
+  {% endif %}
+  {{ block.super }}
+{% endblock %}

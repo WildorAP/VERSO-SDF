@@ -11,7 +11,7 @@ Repository kept separate from the VERSO core (`BASE_DE_CLIENTES`, [versotek.io](
 | Tranche | SEPs           | Status                                                                                  |
 | ------- | -------------- | --------------------------------------------------------------------------------------- |
 | **T1**  | SEP-1, SEP-10  | Complete on testnet (`anchor.versotek.io`) — 3 deliverables verified, see details below |
-| **T2**  | SEP-24, SEP-38 | **Etapa 3 MVP complete** (code + local E2E on testnet). Production deploy + Etapa 4 (KYC/webhook) pending |
+| **T2**  | SEP-24, SEP-38 | **Etapa 3 MVP complete** (on-ramp webview + SEP-38). **Etapa 4 in progress** (VERSO login/register in webview, KYC gate). Production deploy + bank webhook pending |
 | **T3**  | Mainnet        | Pending                                                                                 |
 
 ## Deliverable status — Tranche 1 (SCF #44)
@@ -196,30 +196,88 @@ The correct place in the protocol for the KYC check and the DIDIT onboarding red
 | SEP-24 webview on-ramp **PEN → USDC** | Done |
 | `Sep24DepositMeta` + admin **Mark PEN received** (mock fiat) | Done |
 | `process_pending_deposits` → USDC on-chain (Polaris) | Done (manual worker locally) |
-| CI: Postgres + Redis, 61 tests | Done |
+| CI: Postgres + Redis, 88 tests | Done |
 
-**Out of scope for Etapa 3 (Etapa 4+):** KYC/DIDIT, bank webhook, USD on-ramp webview, off-ramp, Railway worker for `process_pending_deposits`.
+**Etapa 4 (in progress):** VERSO login/register inside the SEP-24 webview, email verification, DIDIT redirect, session KYC gate. **Still mock/TBD:** bank webhook for real PEN confirmation, Railway worker for `process_pending_deposits`, USD on-ramp webview, off-ramp.
 
-### Local E2E — SEP-24 PEN → USDC
+## Stellar wallets (Lobstr, Freighter, Demo Wallet, …)
 
-Prerequisites: `backend/.env` from `.env.example`, anchor `SIGNING_SEED` funded with **XLM + USDC testnet**, VERSO Core or mock on `:9000`.
+This anchor is designed for the **standard Stellar on-ramp flow**, not as a standalone website. Compatible wallets (Lobstr, Freighter, xBull, Solar, [Stellar Demo Wallet](https://demo-wallet.stellar.org), etc.) integrate via **SEP-10** and **SEP-24** when the anchor is listed in `stellar.toml` with a **public** `HOST_URL`.
 
-**Mock rates** (if Core is not running):
+### What the wallet does
 
-```json
-{"rate_venta": "3.5000", "rate_compra": "3.4000"}
+1. **SEP-10** — User signs a challenge with their Stellar account (`G...`); anchor returns a JWT.
+2. **SEP-24 interactive deposit** — Wallet calls `POST /sep24/transactions/deposit/interactive` with the JWT and opens the returned **`url`** in an **in-app webview**.
+3. **Completion** — Wallet polls or refreshes transaction status; when the anchor marks the deposit complete, USDC appears in the user's Stellar account.
+
+The wallet does **not** implement VERSO login, KYC, or bank transfer UI — it only embeds the anchor's webview.
+
+### What runs inside the webview (anchor-hosted)
+
+| Step | Screen | Backend |
+| ---- | ------ | ------- |
+| 1 | **Iniciar sesión** VERSO (email + password) | `POST /internal/users/login/` on VERSO Core |
+| 2 | *Optional* **Crear cuenta** (link “¿Aún no tienes cuenta?”) | `POST /internal/users/register/` |
+| 3 | Verificar email (código) | `POST /internal/users/verify-email/` |
+| 4 | KYC / DIDIT (redirect) | VERSO web + callback to anchor |
+| 5 | Monto PEN → USDC | `GET /internal/rates/pen-usdc/` |
+| 6 | Instrucciones CCI/CCE | Anchor only |
+| 7 | Estado `completed` + USDC on-chain | `process_pending_deposits` worker |
+
+The Stellar account used in SEP-10 is the account that receives USDC. After login, Core links that wallet via `POST /internal/users/link-stellar-key/`.
+
+### What wallets never call directly
+
+| Component | Visible to wallet? |
+| --------- | ------------------ |
+| VERSO Core (`VERSO_CORE_API_URL`) | No — anchor backend only |
+| Django Admin “Mark PEN received” | No — local mock; production uses bank webhook |
+| `process_pending_deposits` | No — anchor worker |
+| SEP-38 `/sep38/quote` | Optional — wallets may quote before deposit; SEP-24 does not consume `quote_id` |
+
+### Local vs production
+
+| Environment | Wallet can connect? |
+| ----------- | ------------------- |
+| `localhost:8000` | **No** — mobile/desktop wallets cannot reach your machine. Use the Python script below (simulates wallet SEP-10 + interactive). |
+| `anchor.versotek.io` (testnet) | **Yes** — if the wallet supports SEP-24 USDC deposits and discovers the anchor via `stellar.toml`. |
+
+**SEP-38** is complementary: wallets can fetch indicative/firm quotes before operating; the **firm price for the on-ramp** is set when the user confirms the PEN amount in the SEP-24 webview, not from a SEP-38 `quote_id`.
+
+### Local E2E — SEP-24 PEN → USDC (full stack)
+
+Prerequisites:
+
+- `backend/.env` from `.env.example` (`ACTIVE_SEPS` includes `sep-24`, `REDIS_URL`, `LOCAL_MODE=1`).
+- Anchor **`SIGNING_SEED`** funded with **XLM + USDC testnet** (Circle faucet or transfer).
+- **VERSO Core** (DJANGO_RAIL) on `:8001` with `ANCHOR_SHARED_SECRET` = anchor `VERSO_CORE_API_KEY`.
+- Testnet client account (`G...` + secret) for SEP-10.
+
+**Anchor `.env` (local):**
+
+```env
+HOST_URL=http://localhost:8000
+VERSO_CORE_API_URL=http://127.0.0.1:8001
+VERSO_CORE_API_KEY=<same as ANCHOR_SHARED_SECRET in VERSO>
+REDIS_URL=redis://localhost:6379/0
 ```
 
-**Four processes:**
+**VERSO `.env` (DJANGO_RAIL):**
 
-```powershell
-# 1 — Redis (docker compose up -d, or REDIS_URL in .env)
-# 2 — backend: python manage.py runserver 8000
-# 3 — backend: python manage.py process_pending_deposits
-# 4 — SEP-10 JWT + POST /sep24/transactions/deposit/interactive → open webapp URL
+```env
+ANCHOR_SHARED_SECRET=<same value>
+ANCHOR_KYC_RETURN_URL=http://localhost:8000/sep24/kyc/callback/
 ```
 
-Flow: webview PEN amount → CCI instructions → admin **SEP-24 deposits → Mark PEN received** → verify USDC on [Stellar Expert testnet](https://stellar.expert/explorer/testnet).
+**Five processes** (all must stay running during a test):
+
+| # | Service | Command | Folder |
+| - | ------- | ------- | ------ |
+| 1 | Redis | `docker compose up -d` | `ANCHOR/` |
+| 2 | Anchor API | `python manage.py runserver 8000` | `backend/` |
+| 3 | Deposit worker | `python manage.py process_pending_deposits` | `backend/` |
+| 4 | VERSO Core | `python manage.py runserver 8001` | `DJANGO_RAIL/` |
+| 5 | Webview entry | SEP-10 + interactive script (below) | `backend/` |
 
 Setup once per environment:
 
@@ -229,6 +287,66 @@ python manage.py migrate
 python manage.py seed_polaris_t2
 ```
 
+**Generate webview URL** (simulates what Lobstr/Freighter do — run in **PowerShell**):
+
+```powershell
+cd backend
+..\venv\Scripts\Activate.ps1
+python -c @"
+import requests
+from stellar_sdk import Keypair, TransactionEnvelope
+
+CLIENT = 'G...'   # your testnet public key
+SECRET = 'S...'   # matching secret
+BASE = 'http://localhost:8000'
+
+kp = Keypair.from_secret(SECRET)
+r = requests.get(f'{BASE}/auth', params={'account': CLIENT, 'home_domain': 'localhost'}, timeout=15)
+r.raise_for_status()
+data = r.json()
+env = TransactionEnvelope.from_xdr(data['transaction'], data['network_passphrase'])
+env.sign(kp)
+token = requests.post(f'{BASE}/auth', json={'transaction': env.to_xdr()}, timeout=15).json()['token']
+dep = requests.post(
+    f'{BASE}/sep24/transactions/deposit/interactive',
+    headers={'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'},
+    json={'asset_code': 'USDC', 'account': CLIENT},
+    timeout=15,
+)
+dep.raise_for_status()
+body = dep.json()
+print('TX_ID:', body['id'])
+print('WEBAPP_URL:', body['url'])
+"@
+```
+
+Open **`WEBAPP_URL`** in the browser.
+
+**Operator flow after webview:**
+
+1. Login (or “Crear cuenta” → register → verify email → KYC).
+2. Enter PEN amount → CCI instructions (`more_info`).
+3. Admin → **VERSO INTEGRATIONS → SEP-24 deposits (PEN on-ramp)** → action **Mark PEN received** (not “Django Polaris → Transactions”).
+4. With `process_pending_deposits` running, status becomes **`completed`** and USDC is sent on-chain (~10 s).
+5. Verify on [Stellar Expert testnet](https://stellar.expert/explorer/testnet).
+
+**Local dev shortcuts** (in `backend/.env`):
+
+| Variable | Effect |
+| -------- | ------ |
+| `VERSO_MOCK_KYC=approved` | Skip KYC gate; go straight to PEN amount (restart runserver) |
+| `VERSO_MOCK_KYC_AUTO_APPROVE_AFTER_VERIFY=1` | Auto-approve KYC after email verify |
+| `VERSO_MOCK_AUTO_CONFIRM_FIAT=1` | Skip admin “Mark PEN received” (never use in production) |
+
+**Email verification in local Core:** SMTP may fail; read the code from VERSO shell:
+
+```powershell
+cd "path\to\DJANGO_RAIL"
+python manage.py shell -c "from django.contrib.auth.models import User; u=User.objects.get(email__iexact='you@example.com'); print(u.perfil.codigo_verificacion_email)"
+```
+
+**Mock rates only** (without VERSO Core): run a stub on `:9000` returning `{"rate_venta":"3.5000","rate_compra":"3.4000"}` and set `VERSO_CORE_API_URL=http://localhost:9000`. For full Etapa 4 onboarding, use real Core on `:8001`.
+
 ## Repository structure
 
 The Git repository lives at the **`ANCHOR/` root**. Django sits under `backend/`; Railway and the build use the root (`railpack.json` runs `cd backend`).
@@ -236,7 +354,7 @@ The Git repository lives at the **`ANCHOR/` root**. Django sits under `backend/`
 ```
 ANCHOR/
 ├── .github/workflows/
-│   └── backend-tests.yml       # CI: Postgres + Redis; all SEPs; 61 tests
+│   └── backend-tests.yml       # CI: Postgres + Redis; all SEPs; 88 tests
 ├── backend/
 │   ├── manage.py
 │   ├── config/                 # settings, urls, wsgi
@@ -253,7 +371,12 @@ ANCHOR/
 │       ├── sep1.py             # Dynamic stellar.toml content
 │       ├── sep10.py            # SEP-10 (400 errors on invalid XDR)
 │       ├── sep38.py            # SEP-38 quote integration
-│       ├── sep24/              # SEP-24 webview (PEN on-ramp MVP)
+│       ├── sep24/              # SEP-24 webview (PEN on-ramp + Etapa 4 onboarding)
+│       │   ├── integration.py  # DepositIntegration, login/register gate
+│       │   ├── kyc_gate.py     # Session onboarding steps
+│       │   ├── kyc_views.py    # DIDIT redirect + login/register switch
+│       │   └── onboarding_forms.py
+│       ├── core_client.py      # VERSO Core HTTP (login, register, verify, link key)
 │       ├── rails.py            # RailsIntegration (mock PEN confirmation)
 │       ├── rates.py            # VERSO Core rate_venta / rate_compra
 │       ├── deposit.py          # CCI helpers + USDC amount computation
@@ -261,7 +384,7 @@ ANCHOR/
 │       ├── kyc_bridge.py       # Core KYC client (Etapa 4)
 │       ├── stellar_payout.py   # On-chain USDC (T1 admin simulation)
 │       ├── withdraw.py         # Off-ramp stub (Etapa 5)
-│       └── tests/              # 9 files, 61 tests (see Tests section)
+│       └── tests/              # 88 tests (see Tests section)
 ├── docker-compose.yml          # Postgres + Redis (optional locally; see Database)
 ├── requirements.txt            # Dependencies (root; used by CI and Railway)
 ├── runtime.txt                 # Python 3.12
@@ -291,7 +414,22 @@ python manage.py seed_polaris_t2
 python manage.py runserver 8000
 ```
 
-For SEP-24 local E2E, also run `python manage.py process_pending_deposits` in a second terminal (see **Tranche 2 — Etapa 3** above).
+For SEP-24 local E2E, run **five processes** (Redis, Anchor `:8000`, `process_pending_deposits`, VERSO Core `:8001`, webview script). See **Stellar wallets** and **Local E2E** under Tranche 2 above.
+
+### VERSO Core internal API (anchor ↔ BASE_DE_CLIENTES)
+
+All calls use `Authorization: Bearer {VERSO_CORE_API_KEY}` (same secret as `ANCHOR_SHARED_SECRET` in Core).
+
+| Method | Path | Purpose |
+| ------ | ---- | ------- |
+| GET | `/internal/users/status/?email=` | Lookup user by email |
+| POST | `/internal/users/login/` | Authenticate for SEP-24 webview |
+| POST | `/internal/users/register/` | Create account from webview |
+| POST | `/internal/users/verify-email/` | Confirm email code |
+| POST | `/internal/users/link-stellar-key/` | Bind `G...` to VERSO user after login |
+| GET | `/internal/rates/pen-usdc/` | Live TC for SEP-38 / SEP-24 |
+
+Implemented in VERSO repo `usuarios/internal_views.py`; consumed by anchor `verso_integrations/core_client.py`.
 
 ## Verifying SEP-1 and SEP-10
 
@@ -329,7 +467,7 @@ cd backend
 python manage.py test verso_integrations
 ```
 
-**61 tests** across 9 files:
+**61 tests** across 9 files → **88 tests** after Etapa 4 onboarding (login, KYC gate, Core client):
 
 | File                          | Covers                                          |
 | ----------------------------- | ----------------------------------------------- |
@@ -342,6 +480,9 @@ python manage.py test verso_integrations
 | `test_rates.py`               | VERSO Core `rate_venta` / `rate_compra` parsing |
 | `test_sep38.py`               | SEP-38 pricing, quotes, TOML quote server       |
 | `test_sep24.py`               | SEP-24 form, integration, rails poll            |
+| `test_core_client.py`         | Core login, register, verify, link key          |
+| `test_kyc_gate.py`            | Onboarding steps (login → register → deposit)   |
+| `test_kyc_views.py`           | DIDIT redirect, onboarding mode switch          |
 
 On every **push** and **pull request**, GitHub Actions runs the same tests against **PostgreSQL + Redis** (`.github/workflows/backend-tests.yml`).
 

@@ -1,0 +1,47 @@
+﻿{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Anchor · VERSO{% endblock %}</title>
+    <link rel="stylesheet" href="{% static 'sep24/css/anchor.css' %}">
+</head>
+<body>
+    {% if show_rail %}
+    <div class="shell shell--onboarding">
+        <header class="onboarding-header{% if not show_timeline %} onboarding-header--logo-only{% endif %}">
+            <img class="brand-logo" src="{% static 'sep24/img/verso-logo.png' %}" alt="VERSO">
+            {% if show_timeline %}
+            <ol class="timeline" aria-label="Progreso del registro">
+                <li class="timeline__step {% if step > 1 %}is-done{% elif step == 1 %}is-current{% endif %}">
+                    <span class="timeline__dot" aria-hidden="true"></span>
+                    <span class="timeline__label">Formulario</span>
+                </li>
+                <li class="timeline__step {% if step > 2 %}is-done{% elif step == 2 %}is-current{% endif %}">
+                    <span class="timeline__dot" aria-hidden="true"></span>
+                    <span class="timeline__label">Validación de correo</span>
+                </li>
+                <li class="timeline__step {% if step > 3 %}is-done{% elif step == 3 %}is-current{% endif %}">
+                    <span class="timeline__dot" aria-hidden="true"></span>
+                    <span class="timeline__label">Verificación DIDIT</span>
+                </li>
+            </ol>
+            {% endif %}
+        </header>
+        <main class="content content--centered">
+            <div class="content__inner{% if content_wide %} content__inner--wide{% endif %}">
+                {% block content %}{% endblock %}
+            </div>
+        </main>
+    </div>
+    {% else %}
+    <div class="shell shell--simple">
+        <div class="content__inner">
+            {% block content_simple %}{% endblock %}
+        </div>
+    </div>
+    {% endif %}
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,82 @@
+{% extends "sep24/onboarding/_base.html" %}
+{% block title %}Verificación de identidad · Anchor VERSO{% endblock %}
+
+{% block content %}
+    <h1>Verificación de identidad</h1>
+    <p class="lede">
+        Confirmamos tu identidad con el mismo KYC de VERSO. Completa el proceso aquí
+        abajo; al terminar continuarás con el depósito PEN.
+    </p>
+
+    {% if email %}
+    <p class="meta">Cuenta: <strong>{{ email }}</strong></p>
+    {% endif %}
+
+    {% if kyc_error %}
+    <div class="error">{{ kyc_error }}</div>
+    {% else %}
+    <div class="didit-panel" aria-label="Verificación DIDIT">
+        <iframe
+            id="didit-embed"
+            class="didit-panel__frame"
+            src="{{ kyc_embed_url }}"
+            title="Verificación de identidad DIDIT"
+            allow="camera; microphone; fullscreen; autoplay; encrypted-media"
+        ></iframe>
+    </div>
+
+    <p id="didit-status" class="didit-status" hidden role="status">
+        Procesando resultado de verificación…
+    </p>
+
+    <p class="foot-link didit-fallback">
+        ¿Problemas con la cámara?
+        <a href="{{ kyc_fallback_url }}" target="_blank" rel="noopener noreferrer">
+            Abrir en pantalla completa
+        </a>
+    </p>
+    {% endif %}
+{% endblock %}
+
+{% block extra_scripts %}
+{% if kyc_embed_url and kyc_callback_url %}
+<script>
+(function () {
+    var callbackUrl = "{{ kyc_callback_url|escapejs }}";
+    var allowedOrigins = {{ didit_origins_json|safe }};
+    var statusEl = document.getElementById("didit-status");
+
+    function showProcessing() {
+        if (statusEl) {
+            statusEl.hidden = false;
+        }
+    }
+
+    function isAllowedOrigin(origin) {
+        return allowedOrigins.indexOf(origin) !== -1;
+    }
+
+    window.addEventListener("message", function (event) {
+        if (!isAllowedOrigin(event.origin)) {
+            return;
+        }
+
+        var payload = event.data || {};
+        var type = payload.type;
+        var data = payload.data || {};
+
+        if (type === "didit:completed") {
+            showProcessing();
+            window.location.href = callbackUrl;
+            return;
+        }
+
+        if (type === "didit:status_updated" && data.status === "Approved") {
+            showProcessing();
+            window.location.href = callbackUrl;
+        }
+    });
+})();
+</script>
+{% endif %}
+{% endblock %}

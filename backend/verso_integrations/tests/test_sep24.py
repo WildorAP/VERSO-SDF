@@ -16,6 +16,7 @@ from verso_integrations.rails import VersoRailsIntegration
 from verso_integrations.rates import FiatUsdcRate
 from verso_integrations.sep24.forms import PenDepositForm
 from verso_integrations.sep24.integration import VersoDepositIntegration
+from verso_integrations.sep24.onboarding_forms import VersoLoginForm, VersoRegisterForm
 
 
 def _create_deposit_transaction(stellar_account: str) -> Transaction:
@@ -40,7 +41,7 @@ class PenDepositFormTests(TestCase):
         self.assertFalse(form.is_valid())
 
 
-@override_settings(VERSO_MOCK_AUTO_CONFIRM_FIAT=False)
+@override_settings(VERSO_MOCK_AUTO_CONFIRM_FIAT=False, VERSO_MOCK_KYC="approved")
 class VersoDepositIntegrationTests(TestCase):
     def setUp(self):
         seed_polaris_t2(distribution_seed=Keypair.random().secret)
@@ -139,7 +140,35 @@ class VersoDepositIntegrationTests(TestCase):
         self.assertIsNone(content)
 
 
-@override_settings(VERSO_MOCK_AUTO_CONFIRM_FIAT=True)
+@override_settings(VERSO_MOCK_KYC="not_found")
+class VersoDepositOnboardingGateTests(TestCase):
+    def setUp(self):
+        seed_polaris_t2(distribution_seed=Keypair.random().secret)
+        self.integration = VersoDepositIntegration()
+        self.request = MagicMock()
+        self.request.session = {}
+        self.transaction = _create_deposit_transaction(Keypair.random().public_key)
+
+    def test_form_for_transaction_returns_login_when_not_found(self):
+        form = self.integration.form_for_transaction(
+            self.request,
+            self.transaction,
+        )
+        self.assertIsInstance(form, VersoLoginForm)
+
+    @override_settings(VERSO_MOCK_KYC="not_found")
+    def test_form_for_transaction_returns_register_when_requested(self):
+        from verso_integrations.sep24.kyc_gate import mark_wants_register
+
+        mark_wants_register(self.request, self.transaction.id)
+        form = self.integration.form_for_transaction(
+            self.request,
+            self.transaction,
+        )
+        self.assertIsInstance(form, VersoRegisterForm)
+
+
+@override_settings(VERSO_MOCK_AUTO_CONFIRM_FIAT=True, VERSO_MOCK_KYC="approved")
 class VersoDepositIntegrationAutoConfirmTests(TestCase):
     def setUp(self):
         seed_polaris_t2(distribution_seed=Keypair.random().secret)

@@ -1,0 +1,37 @@
+﻿{% extends "sep24/onboarding/_base.html" %}
+{% block title %}Crear cuenta · Anchor VERSO{% endblock %}
+
+{% block content %}
+    <h1>Crea tu cuenta</h1>
+    <p class="lede">
+        Regístrate en VERSO para operar PEN → USDC con la wallet
+        <strong>{{ wallet_short }}</strong> de esta sesión.
+    </p>
+
+    {% if error %}<div class="error">{{ error }}</div>{% endif %}
+
+    <form method="post">
+        {% csrf_token %}
+        <div class="field">
+            <label for="id_email">Correo</label>
+            <input id="id_email" type="email" name="email" placeholder="tu@correo.com" required>
+        </div>
+        <div class="field">
+            <label for="id_password">Contraseña</label>
+            <input id="id_password" type="password" name="password" required>
+        </div>
+        <div class="field">
+            <label for="id_nombre">Nombres</label>
+            <input id="id_nombre" type="text" name="nombre" required>
+        </div>
+        <div class="field">
+            <label for="id_apellidos">Apellidos</label>
+            <input id="id_apellidos" type="text" name="apellidos" required>
+        </div>
+        <button type="submit" class="btn">Crear cuenta</button>
+    </form>
+    <p class="auth-switch">
+        ¿Ya tienes cuenta?
+        <a href="{{ login_url }}">Iniciar sesión</a>
+    </p>
+{% endblock %}
