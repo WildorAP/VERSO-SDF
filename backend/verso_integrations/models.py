@@ -156,13 +156,22 @@ class Sep24WithdrawMeta(models.Model):
         """
         from polaris.utils import maybe_make_callback
 
-        from verso_integrations.withdraw import finalize_sep24_withdrawal
+        from verso_integrations.withdraw import (
+            WithdrawalUsdcNotReceivedError,
+            finalize_sep24_withdrawal,
+        )
 
         if self.fiat_sent_at is None:
             self.fiat_sent_at = timezone.now()
             self.save(update_fields=["fiat_sent_at", "updated_at"])
 
-        finalized = finalize_sep24_withdrawal(self)
+        try:
+            finalized = finalize_sep24_withdrawal(self)
+        except WithdrawalUsdcNotReceivedError:
+            if self.fiat_sent_at:
+                self.fiat_sent_at = None
+                self.save(update_fields=["fiat_sent_at", "updated_at"])
+            raise
         if finalized:
             maybe_make_callback(self.transaction)
         return finalized

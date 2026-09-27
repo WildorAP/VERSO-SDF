@@ -243,7 +243,19 @@ class Sep24WithdrawMetaAdmin(admin.ModelAdmin):
                 )
                 continue
             already_sent = meta.fiat_sent_at is not None
-            meta.mark_fiat_sent()
+            try:
+                meta.mark_fiat_sent()
+            except Exception as exc:
+                from verso_integrations.withdraw import WithdrawalUsdcNotReceivedError
+
+                if isinstance(exc, WithdrawalUsdcNotReceivedError):
+                    self.message_user(
+                        request,
+                        f"SEP-24 meta #{meta.pk}: {exc}",
+                        level=messages.ERROR,
+                    )
+                    continue
+                raise
             if already_sent:
                 repaired += 1
             else:

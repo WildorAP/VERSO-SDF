@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from urllib.parse import urlencode
+
 from django.shortcuts import redirect
 from django.urls import reverse
 from polaris.models import Transaction
@@ -43,6 +45,19 @@ class Sep24OnboardingMiddleware:
                 )
             except Transaction.DoesNotExist:
                 return self.get_response(request)
+
+            if kind == Transaction.KIND.withdrawal:
+                meta = Sep24WithdrawMeta.objects.filter(transaction=transaction).first()
+                if (
+                    meta
+                    and meta.payout_confirmed_at
+                    and transaction.status != Transaction.STATUS.completed
+                ):
+                    params = {"id": str(transaction.id), "initialLoad": "true"}
+                    callback = request.GET.get("callback")
+                    if callback:
+                        params["callback"] = callback
+                    return redirect(f"{reverse('more_info')}?{urlencode(params)}")
 
             if meta_model.objects.filter(transaction=transaction).exists():
                 return self.get_response(request)

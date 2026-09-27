@@ -148,6 +148,11 @@ LOCAL_MODE = env.bool("LOCAL_MODE", default=False)
 VERSO_MOCK_AUTO_CONFIRM_FIAT = env.bool("VERSO_MOCK_AUTO_CONFIRM_FIAT", default=False)
 # Dev/test: mark fiat payout sent immediately after payout CCI is submitted.
 VERSO_MOCK_AUTO_SEND_FIAT = env.bool("VERSO_MOCK_AUTO_SEND_FIAT", default=False)
+# Dev/test only: complete SEP-24 withdraw in admin without on-chain USDC (never in production).
+VERSO_MOCK_COMPLETE_WITHDRAW_WITHOUT_USDC = env.bool(
+    "VERSO_MOCK_COMPLETE_WITHDRAW_WITHOUT_USDC",
+    default=False,
+)
 
 # Etapa 4 — KYC gate (empty = live Core lookup). Values: approved|not_found|pending|rejected
 VERSO_MOCK_KYC = env("VERSO_MOCK_KYC", default="")

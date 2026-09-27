@@ -1,0 +1,50 @@
+{% extends "polaris/more_info_verso.html" %}
+{% load static %}
+
+{% block "instructions" %}
+<section class="verso-withdraw-more-info">
+    {% if awaiting_usdc %}
+    <h2 class="verso-withdraw-more-info__title">Envía USDC on-chain</h2>
+    <p class="verso-withdraw-more-info__lede">
+        Tu wallet debería firmar y enviar <strong>{{ amount_usdc }} USDC</strong> automáticamente.
+        Si no ocurre en unos segundos, transfiere manualmente a la cuenta del anchor con el memo exacto.
+    </p>
+
+    <div class="transfer-summary">
+        <div class="transfer-summary__row">
+            <span>USDC a enviar</span>
+            <strong>{{ amount_usdc }} USDC</strong>
+        </div>
+        <div class="transfer-summary__row transfer-summary__row--highlight">
+            <span>Recibirás en tu banco</span>
+            <strong>{{ fiat_symbol }} {{ amount_fiat }}</strong>
+        </div>
+    </div>
+
+    <div class="transfer-card">
+        <p class="transfer-card__eyebrow">Cuenta Stellar del anchor</p>
+        <div class="copy-field copy-field--emphasis">
+            <div class="copy-field__label">Cuenta destino (G…)</div>
+            <div class="copy-field__value copy-field__value--mono" id="receiving-account">{{ receiving_account }}</div>
+            <button type="button" class="btn-copy" data-copy-target="receiving-account">Copiar cuenta</button>
+        </div>
+        <div class="copy-field copy-field--emphasis">
+            <div class="copy-field__label">Memo ({{ memo_type }})</div>
+            <div class="copy-field__value copy-field__value--mono" id="payment-memo">{{ memo }}</div>
+            <button type="button" class="btn-copy" data-copy-target="payment-memo">Copiar memo</button>
+        </div>
+    </div>
+    {% elif transaction.status == "completed" %}
+    <p class="verso-withdraw-more-info__lede">
+        Enviamos <strong>{{ fiat_symbol }} {{ amount_fiat }}</strong> a tu cuenta bancaria peruana.
+    </p>
+    {% else %}
+    <p class="verso-withdraw-more-info__lede">
+        Recibimos tu USDC. Estamos procesando el pago de
+        <strong>{{ fiat_symbol }} {{ amount_fiat }}</strong> a tu cuenta bancaria.
+    </p>
+    {% endif %}
+</section>
+<link rel="stylesheet" href="{% static 'sep24/css/anchor.css' %}">
+<script src="{% static 'sep24/js/deposit_wait.js' %}"></script>
+{% endblock %}

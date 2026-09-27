@@ -126,6 +126,60 @@ class VersoWithdrawIntegrationTests(TestCase):
             self.integration.form_for_transaction(self.request, self.transaction)
         )
 
+    def test_more_info_uses_polaris_callback_template(self):
+        from django.utils import timezone
+        from polaris.templates import Template
+
+        meta = Sep24WithdrawMeta.objects.create(
+            transaction=self.transaction,
+            fiat_currency="PEN",
+            amount_usdc=Decimal("5.0000000"),
+            amount_pen=Decimal("18.50"),
+            tipo_cambio=Decimal("3.7000"),
+            sell_asset=usdc_asset_identification(),
+            buy_asset=pen_asset_identification(),
+            payout_confirmed_at=timezone.now(),
+        )
+        self.transaction.receiving_anchor_account = "GANCHOR123"
+        self.transaction.memo = "memo123"
+        self.transaction.memo_type = Transaction.MEMO_TYPES.hash
+        self.transaction.status = Transaction.STATUS.pending_user_transfer_start
+        self.transaction.save()
+
+        content = self.integration.content_for_template(
+            self.request,
+            Template.MORE_INFO,
+            transaction=self.transaction,
+        )
+        self.assertEqual(
+            content["template_name"],
+            "polaris/more_info_withdraw_verso.html",
+        )
+        self.assertTrue(content["awaiting_usdc"])
+        self.assertIn("poll_url", content)
+
+    def test_withdraw_content_none_after_payout_for_polaris_redirect(self):
+        from django.utils import timezone
+        from polaris.templates import Template
+
+        Sep24WithdrawMeta.objects.create(
+            transaction=self.transaction,
+            fiat_currency="PEN",
+            amount_usdc=Decimal("5.0000000"),
+            amount_pen=Decimal("18.50"),
+            tipo_cambio=Decimal("3.7000"),
+            sell_asset=usdc_asset_identification(),
+            buy_asset=pen_asset_identification(),
+            payout_confirmed_at=timezone.now(),
+        )
+        content = self.integration.content_for_template(
+            self.request,
+            Template.WITHDRAW,
+            form=None,
+            transaction=self.transaction,
+        )
+        self.assertIsNone(content)
+
     def test_payout_form_requires_origen_fondos_otro_when_otro(self):
         form = PayoutBankForm(
             {
@@ -176,6 +230,7 @@ class VersoWithdrawRailsTests(TestCase):
 
         self.meta.fiat_sent_at = timezone.now()
         self.meta.save()
+        self.transaction.stellar_transaction_id = "abc123stellarhash"
         self.transaction.status = Transaction.STATUS.pending_external
         self.transaction.save()
 
@@ -193,6 +248,7 @@ class VersoWithdrawRailsTests(TestCase):
         self.meta.payout_confirmed_at = timezone.now()
         self.meta.save()
         self.transaction.amount_in = Decimal("10.0000000")
+        self.transaction.stellar_transaction_id = "abc123stellarhash"
         self.transaction.status = Transaction.STATUS.pending_external
         self.transaction.save()
 
@@ -200,3 +256,18 @@ class VersoWithdrawRailsTests(TestCase):
         self.transaction.refresh_from_db()
         self.assertEqual(self.transaction.status, Transaction.STATUS.completed)
         self.assertIsNotNone(self.meta.fiat_sent_at)
+
+    def test_mark_fiat_sent_rejects_without_on_chain_usdc(self):
+        from django.utils import timezone
+
+        from verso_integrations.withdraw import WithdrawalUsdcNotReceivedError
+
+        self.meta.payout_confirmed_at = timezone.now()
+        self.meta.save()
+        self.transaction.status = Transaction.STATUS.pending_user_transfer_start
+        self.transaction.save()
+
+        with self.assertRaises(WithdrawalUsdcNotReceivedError):
+            self.meta.mark_fiat_sent()
+        self.meta.refresh_from_db()
+        self.assertIsNone(self.meta.fiat_sent_at)

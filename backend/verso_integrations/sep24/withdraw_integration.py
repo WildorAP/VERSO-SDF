@@ -38,7 +38,13 @@ from verso_integrations.sep24.onboarding_flow import (
 )
 from verso_integrations.sep24.transaction_views import TERMINAL_TRANSACTION_STATUSES
 from verso_integrations.sep38 import price_for_pair
-from verso_integrations.withdraw import build_payout_bank_details, compute_amount_fiat
+from verso_integrations.withdraw import build_payout_bank_details, compute_amount_fiat, usdc_payment_received
+
+
+def _awaiting_usdc_payment(transaction: Transaction) -> bool:
+    if transaction.status == Transaction.STATUS.completed:
+        return False
+    return not usdc_payment_received(transaction)
 
 
 def _meta_display_context(meta: Sep24WithdrawMeta) -> dict:
@@ -86,6 +92,8 @@ def _withdraw_wait_status_message(
         )
     if status == Transaction.STATUS.pending_user_transfer_start:
         return "Envía USDC a la cuenta indicada con el memo exacto."
+    if not usdc_payment_received(transaction):
+        return "Esperando tu envío de USDC on-chain…"
     if meta.fiat_sent_at:
         return "Transferencia fiat completada."
     messages = {
@@ -96,6 +104,27 @@ def _withdraw_wait_status_message(
         Transaction.STATUS.pending_stellar: "Procesando retiro…",
     }
     return messages.get(status, "Procesando retiro…")
+
+
+def _more_info_withdraw_content(
+    request: Request, transaction: Transaction, meta: Sep24WithdrawMeta, base: dict
+) -> dict:
+    """Keep Polaris more_info (callback.js) so Demo Wallet can submit USDC."""
+    poll_query = urlencode({"id": str(transaction.id)})
+    base.update(
+        {
+            "poll_url": request.build_absolute_uri(
+                f"{reverse('sep24_transaction_poll')}?{poll_query}"
+            ),
+            "template_name": "polaris/more_info_withdraw_verso.html",
+            "awaiting_usdc": _awaiting_usdc_payment(transaction),
+            "receiving_account": transaction.receiving_anchor_account or "",
+            "memo": transaction.memo or "",
+            "memo_type": transaction.memo_type or "",
+            **_meta_display_context(meta),
+        }
+    )
+    return base
 
 
 def _withdraw_waiting_content(
@@ -312,10 +341,14 @@ class VersoWithdrawIntegration(WithdrawalIntegration):
         if transaction is not None:
             meta = Sep24WithdrawMeta.objects.filter(transaction=transaction).first()
             if meta and meta.payout_confirmed_at:
-                if transaction.status == Transaction.STATUS.pending_user_transfer_start:
-                    if template in {Template.MORE_INFO, Template.WITHDRAW}:
+                if template == Template.MORE_INFO:
+                    return _more_info_withdraw_content(request, transaction, meta, base)
+                # Polaris POST checks content_for_template(WITHDRAW, form=None) after the
+                # last form; returning content here would keep the user on webapp instead of
+                # redirecting to more_info (callback.js / Demo Wallet payment).
+                if template == Template.WITHDRAW and form is not None:
+                    if _awaiting_usdc_payment(transaction):
                         return _withdraw_send_content(request, transaction, meta, base)
-                elif template in {Template.MORE_INFO, Template.WITHDRAW}:
                     return _withdraw_waiting_content(request, transaction, meta, base)
 
         if template == Template.MORE_INFO and transaction is not None:

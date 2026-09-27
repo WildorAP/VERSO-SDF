@@ -15,8 +15,8 @@
     <p class="lede" id="withdraw-wait-lede">
         {% if transaction_status == "completed" %}
         Enviamos <strong>{{ fiat_symbol }} {{ amount_fiat }}</strong> a tu cuenta bancaria.
-        {% elif transaction_status == "pending_user_transfer_start" %}
-        Envía <strong>{{ amount_usdc }} USDC</strong> con el memo indicado para continuar.
+        {% elif transaction_status == "pending_user_transfer_start" or not stellar_transaction_id %}
+        Envía <strong>{{ amount_usdc }} USDC</strong> desde tu wallet a la cuenta del anchor con el memo exacto.
         {% else %}
         Recibimos tu USDC. Estamos procesando el pago de
         <strong>{{ fiat_symbol }} {{ amount_fiat }}</strong> a tu cuenta.
