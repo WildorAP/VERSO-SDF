@@ -183,4 +183,20 @@ class VersoWithdrawRailsTests(TestCase):
             Transaction.objects.filter(id=self.transaction.id)
         )
         self.assertEqual(len(complete), 1)
-        self.assertEqual(complete[0].id, self.transaction.id)
+        self.transaction.refresh_from_db()
+        self.assertEqual(self.transaction.status, Transaction.STATUS.completed)
+        self.assertIsNotNone(self.transaction.completed_at)
+
+    def test_mark_fiat_sent_completes_transaction(self):
+        from django.utils import timezone
+
+        self.meta.payout_confirmed_at = timezone.now()
+        self.meta.save()
+        self.transaction.amount_in = Decimal("10.0000000")
+        self.transaction.status = Transaction.STATUS.pending_external
+        self.transaction.save()
+
+        self.meta.mark_fiat_sent()
+        self.transaction.refresh_from_db()
+        self.assertEqual(self.transaction.status, Transaction.STATUS.completed)
+        self.assertIsNotNone(self.meta.fiat_sent_at)

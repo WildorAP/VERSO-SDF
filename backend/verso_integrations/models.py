@@ -148,9 +148,24 @@ class Sep24WithdrawMeta(models.Model):
             f"→ {self.amount_pen} {self.fiat_currency}"
         )
 
-    def mark_fiat_sent(self) -> None:
-        self.fiat_sent_at = timezone.now()
-        self.save(update_fields=["fiat_sent_at", "updated_at"])
+    def mark_fiat_sent(self) -> bool:
+        """
+        Record fiat payout and complete the linked Polaris SEP-24 transaction.
+
+        Does not depend on ``poll_outgoing_transactions`` running in the background.
+        """
+        from polaris.utils import maybe_make_callback
+
+        from verso_integrations.withdraw import finalize_sep24_withdrawal
+
+        if self.fiat_sent_at is None:
+            self.fiat_sent_at = timezone.now()
+            self.save(update_fields=["fiat_sent_at", "updated_at"])
+
+        finalized = finalize_sep24_withdrawal(self)
+        if finalized:
+            maybe_make_callback(self.transaction)
+        return finalized
 
 
 class FiatDeposit(models.Model):

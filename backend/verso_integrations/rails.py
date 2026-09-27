@@ -10,7 +10,7 @@ from polaris.integrations import RailsIntegration
 from polaris.models import Transaction
 
 from verso_integrations.models import Sep24DepositMeta, Sep24WithdrawMeta
-from verso_integrations.withdraw import compute_amount_fiat
+from verso_integrations.withdraw import compute_amount_fiat, finalize_sep24_withdrawal
 
 
 class VersoRailsIntegration(RailsIntegration):
@@ -71,9 +71,10 @@ class VersoRailsIntegration(RailsIntegration):
         transaction.save(update_fields=["amount_out", "amount_fee", "fee_asset"])
 
         if meta.fiat_sent_at:
-            transaction.status = Transaction.STATUS.completed
-        else:
-            transaction.status = Transaction.STATUS.pending_external
+            finalize_sep24_withdrawal(meta)
+            return
+
+        transaction.status = Transaction.STATUS.pending_external
         transaction.save(update_fields=["status"])
 
     def poll_outgoing_transactions(self, transactions, *args, **kwargs):
@@ -83,12 +84,10 @@ class VersoRailsIntegration(RailsIntegration):
                 meta = transaction.verso_withdraw_meta
             except Sep24WithdrawMeta.DoesNotExist:
                 continue
-            if meta.fiat_sent_at is not None:
-                transaction.amount_out = meta.amount_pen
-                transaction.amount_fee = Decimal("0")
-                transaction.fee_asset = meta.buy_asset
-                transaction.save(
-                    update_fields=["amount_out", "amount_fee", "fee_asset"]
-                )
+            if meta.fiat_sent_at is None:
+                continue
+            finalize_sep24_withdrawal(meta)
+            transaction.refresh_from_db()
+            if transaction.status == Transaction.STATUS.completed:
                 complete.append(transaction)
         return complete

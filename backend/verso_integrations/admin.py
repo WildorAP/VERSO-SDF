@@ -1,6 +1,7 @@
 from django.contrib import admin, messages
 from django.utils import timezone
 from django.db import transaction
+from polaris.models import Transaction
 
 from verso_integrations.deposit import get_cci_deposit_instructions
 from verso_integrations.models import FiatDeposit, Sep24DepositMeta, Sep24WithdrawMeta
@@ -231,19 +232,31 @@ class Sep24WithdrawMetaAdmin(admin.ModelAdmin):
     @admin.action(description="Mark fiat sent (completes SEP-24 withdrawal)")
     def mark_fiat_sent(self, request, queryset):
         updated = 0
+        repaired = 0
         for meta in queryset:
-            if meta.fiat_sent_at is not None:
+            tx = meta.transaction
+            if tx.status == Transaction.STATUS.completed:
                 self.message_user(
                     request,
-                    f"SEP-24 withdraw meta #{meta.pk}: skipped (already sent).",
+                    f"SEP-24 meta #{meta.pk}: skipped (transaction already completed).",
                     level=messages.WARNING,
                 )
                 continue
+            already_sent = meta.fiat_sent_at is not None
             meta.mark_fiat_sent()
-            updated += 1
+            if already_sent:
+                repaired += 1
+            else:
+                updated += 1
         if updated:
             self.message_user(
                 request,
-                f"{updated} SEP-24 withdrawal(s) marked as fiat sent.",
+                f"{updated} SEP-24 withdrawal(s) marked as fiat sent and completed.",
+                level=messages.SUCCESS,
+            )
+        if repaired:
+            self.message_user(
+                request,
+                f"{repaired} withdrawal(s) re-synced to completed (fiat was already marked sent).",
                 level=messages.SUCCESS,
             )
