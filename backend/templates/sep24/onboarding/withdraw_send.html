@@ -1,0 +1,64 @@
+{% extends "sep24/onboarding/_base.html" %}
+{% load static %}
+{% block title %}Envía USDC · Anchor VERSO{% endblock %}
+
+{% block content %}
+    <h1>Envía USDC on-chain</h1>
+    <p class="lede">
+        Transfiere exactamente <strong>{{ amount_usdc }} USDC</strong> desde tu wallet
+        a nuestra cuenta Stellar. Usa el memo indicado o la transacción no se acreditará.
+    </p>
+
+    <div class="transfer-summary">
+        <div class="transfer-summary__row">
+            <span>USDC a enviar</span>
+            <strong>{{ amount_usdc }} USDC</strong>
+        </div>
+        <div class="transfer-summary__row transfer-summary__row--highlight">
+            <span>Recibirás en tu banco</span>
+            <strong>{{ fiat_symbol }} {{ amount_fiat }}</strong>
+        </div>
+    </div>
+
+    <div class="transfer-card">
+        <p class="transfer-card__eyebrow">Cuenta Stellar del anchor</p>
+
+        <div class="copy-field copy-field--emphasis">
+            <div class="copy-field__label">Cuenta destino (G…)</div>
+            <div class="copy-field__value copy-field__value--mono" id="receiving-account">{{ receiving_account }}</div>
+            <button type="button" class="btn-copy" data-copy-target="receiving-account">Copiar cuenta</button>
+        </div>
+
+        <div class="copy-field copy-field--emphasis">
+            <div class="copy-field__label">Memo ({{ memo_type }})</div>
+            <div class="copy-field__value copy-field__value--mono" id="payment-memo">{{ memo }}</div>
+            <button type="button" class="btn-copy" data-copy-target="payment-memo">Copiar memo</button>
+        </div>
+    </div>
+
+    {% if payout_bank_details.account_number %}
+    <div class="transfer-card">
+        <p class="transfer-card__eyebrow">Tu cuenta de destino · {{ fiat_currency }}</p>
+        <div class="copy-field">
+            <div class="copy-field__label">Banco</div>
+            <div class="copy-field__value">{{ payout_bank_details.bank_name }}</div>
+        </div>
+        <div class="copy-field">
+            <div class="copy-field__label">Titular</div>
+            <div class="copy-field__value">{{ payout_bank_details.account_holder }}</div>
+        </div>
+        <div class="copy-field">
+            <div class="copy-field__label">CCI</div>
+            <div class="copy-field__value copy-field__value--mono">{{ payout_bank_details.account_number }}</div>
+        </div>
+    </div>
+    {% endif %}
+
+    <p class="didit-status" role="status">
+        Cuando recibamos tu USDC, iniciaremos la transferencia a tu cuenta bancaria.
+    </p>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{% static 'sep24/js/deposit_wait.js' %}"></script>
+{% endblock %}

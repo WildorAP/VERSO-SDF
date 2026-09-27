@@ -11,6 +11,7 @@ class VersoIntegrationsConfig(AppConfig):
 
         from .sep1 import return_toml_contents
         from .sep24.integration import VersoDepositIntegration
+        from .sep24.withdraw_integration import VersoWithdrawIntegration
         from .sep38 import VersoQuoteIntegration
         from .rails import VersoRailsIntegration
 
@@ -18,5 +19,6 @@ class VersoIntegrationsConfig(AppConfig):
             toml=return_toml_contents,
             quote=VersoQuoteIntegration(),
             deposit=VersoDepositIntegration(),
+            withdrawal=VersoWithdrawIntegration(),
             rails=VersoRailsIntegration(),
         )

@@ -1,0 +1,96 @@
+{% extends "sep24/onboarding/_base.html" %}
+{% load static %}
+{% block title %}Retiro · Anchor VERSO{% endblock %}
+
+{% block content %}
+    <h1>Retiro {{ pair_label }}</h1>
+    <p class="lede">
+        Ingresa cuánto USDC enviarás on-chain.
+        Te pagaremos el equivalente en {{ fiat_currency }} en tu cuenta bancaria peruana (CCI/CCE).
+    </p>
+
+    <div class="fiat-switch" role="tablist" aria-label="Moneda de retiro">
+        <a
+            class="fiat-switch__option{% if fiat_currency == 'PEN' %} is-active{% endif %}"
+            href="{{ pen_switch_url }}"
+        >
+            Soles (PEN)
+        </a>
+        <a
+            class="fiat-switch__option{% if fiat_currency == 'USD' %} is-active{% endif %}"
+            href="{{ usd_switch_url }}"
+        >
+            Dólares (USD)
+        </a>
+    </div>
+
+    {% if rate_unavailable %}
+    <div class="error">No pudimos obtener el tipo de cambio. Intenta de nuevo en unos segundos.</div>
+    {% else %}
+    <div class="rate-banner" role="status">
+        <span class="rate-banner__label">Tipo de cambio vigente (compra)</span>
+        <strong class="rate-banner__value">{{ fiat_symbol }} {{ rate_compra_display }} por 1 USDC</strong>
+    </div>
+    {% endif %}
+
+    {% if form.non_field_errors %}
+        {% for error in form.non_field_errors %}
+        <div class="error">{{ error }}</div>
+        {% endfor %}
+    {% endif %}
+
+    <form method="post" action="{{ post_url }}" class="deposit-form"{% if rate_unavailable %} hidden{% endif %}>
+        {% csrf_token %}
+        {% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}
+
+        <div class="field">
+            <label for="id_amount_usdc">{{ form.amount_usdc.label }} *</label>
+            <input
+                type="text"
+                name="amount_usdc"
+                id="id_amount_usdc"
+                inputmode="decimal"
+                placeholder="0.0000000"
+                autocomplete="off"
+                value="{{ form.amount_usdc.value|default_if_none:'' }}"
+                required
+            >
+            {% if form.amount_usdc.help_text %}
+            <p class="field-hint">{{ form.amount_usdc.help_text }}</p>
+            {% endif %}
+            {% if form.amount_usdc.errors %}
+                {% for error in form.amount_usdc.errors %}
+                <p class="field-error">{{ error }}</p>
+                {% endfor %}
+            {% endif %}
+        </div>
+
+        <div class="quote-panel" aria-live="polite">
+            <div class="quote-panel__row">
+                <span class="quote-panel__label">Enviarás</span>
+                <strong class="quote-panel__value" id="quote-send-usdc">— USDC</strong>
+            </div>
+            <div class="quote-panel__row quote-panel__row--highlight">
+                <span class="quote-panel__label">Recibirás</span>
+                <strong class="quote-panel__value" id="quote-receive-fiat">{{ fiat_symbol }} —</strong>
+            </div>
+            <p class="quote-panel__note">Cotización referencial con el tipo de cambio vigente.</p>
+        </div>
+
+        <button type="submit" class="btn">Continuar</button>
+    </form>
+{% endblock %}
+
+{% block extra_scripts %}
+{% if not rate_unavailable %}
+<script>
+    window.VERSO_WITHDRAW_QUOTE = {
+        rateCompra: {{ rate_compra|default:"0" }},
+        minUsdc: {{ min_usdc_amount|default:"1" }},
+        fiatSymbol: "{{ fiat_symbol|escapejs }}",
+        fiatCurrency: "{{ fiat_currency|escapejs }}"
+    };
+</script>
+<script defer src="{% static 'sep24/js/withdraw_quote.js' %}"></script>
+{% endif %}
+{% endblock %}

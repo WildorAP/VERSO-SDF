@@ -87,6 +87,72 @@ class Sep24DepositMeta(models.Model):
             tx.save(update_fields=["status"])
 
 
+class Sep24WithdrawMeta(models.Model):
+    """Fiat off-ramp metadata linked to a Polaris SEP-24 withdrawal Transaction."""
+
+    class FiatCurrency(models.TextChoices):
+        PEN = "PEN", "PEN"
+        USD = "USD", "USD"
+
+    transaction = models.OneToOneField(
+        "polaris.Transaction",
+        on_delete=models.CASCADE,
+        related_name="verso_withdraw_meta",
+    )
+    fiat_currency = models.CharField(
+        max_length=3,
+        choices=FiatCurrency.choices,
+        default=FiatCurrency.PEN,
+        db_index=True,
+        help_text="Fiat currency paid to the client in this SEP-24 off-ramp.",
+    )
+    amount_usdc = models.DecimalField(max_digits=18, decimal_places=7)
+    amount_pen = models.DecimalField(
+        max_digits=18,
+        decimal_places=2,
+        help_text="Fiat amount the client receives (PEN or USD).",
+    )
+    tipo_cambio = models.DecimalField(
+        max_digits=12,
+        decimal_places=4,
+        help_text="rate_compra (fiat per 1 USDC) at quote time.",
+    )
+    sell_asset = models.TextField(
+        help_text="SEP-38 asset id sold by user on-chain (stellar:USDC:...).",
+    )
+    buy_asset = models.TextField(
+        help_text="SEP-38 asset id paid off-chain (iso4217:PEN or iso4217:USD).",
+    )
+    payout_bank_details = models.JSONField(default=dict, blank=True)
+    payout_confirmed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="When the client submitted their payout CCI details.",
+    )
+    fiat_sent_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "SEP-24 withdrawal (fiat off-ramp)"
+        verbose_name_plural = "SEP-24 withdrawals (fiat off-ramp)"
+
+    @property
+    def amount_fiat(self) -> Decimal:
+        return self.amount_pen
+
+    def __str__(self) -> str:
+        return (
+            f"SEP-24 {self.transaction_id} — {self.amount_usdc} USDC "
+            f"→ {self.amount_pen} {self.fiat_currency}"
+        )
+
+    def mark_fiat_sent(self) -> None:
+        self.fiat_sent_at = timezone.now()
+        self.save(update_fields=["fiat_sent_at", "updated_at"])
+
+
 class FiatDeposit(models.Model):
     class Status(models.TextChoices):
         PENDING = "pending", "Pending (awaiting bank transfer)"

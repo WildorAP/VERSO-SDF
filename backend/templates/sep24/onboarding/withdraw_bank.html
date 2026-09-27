@@ -1,0 +1,74 @@
+{% extends "sep24/onboarding/_base.html" %}
+{% block title %}Cuenta de destino · Anchor VERSO{% endblock %}
+
+{% block content %}
+    <h1>Cuenta para recibir {{ fiat_currency }}</h1>
+    <p class="lede">
+        Indica el CCI/CCE de tu cuenta en un banco peruano donde recibirás
+        <strong>{{ fiat_symbol }} {{ amount_fiat }}</strong> por tus
+        <strong>{{ amount_usdc }} USDC</strong>.
+    </p>
+
+    <div class="transfer-summary">
+        <div class="transfer-summary__row">
+            <span>USDC a enviar</span>
+            <strong>{{ amount_usdc }} USDC</strong>
+        </div>
+        <div class="transfer-summary__row transfer-summary__row--highlight">
+            <span>Recibirás</span>
+            <strong>{{ fiat_symbol }} {{ amount_fiat }}</strong>
+        </div>
+        <div class="transfer-summary__row">
+            <span>Tipo de cambio</span>
+            <strong>{{ fiat_symbol }} {{ tipo_cambio }} / USDC</strong>
+        </div>
+    </div>
+
+    {% if form.non_field_errors %}
+        {% for error in form.non_field_errors %}
+        <div class="error">{{ error }}</div>
+        {% endfor %}
+    {% endif %}
+
+    <form method="post" action="{{ post_url }}" class="transfer-form">
+        {% csrf_token %}
+
+        <div class="field">
+            <label for="id_bank_name">{{ form.bank_name.label }} *</label>
+            {{ form.bank_name }}
+            {% if form.bank_name.errors %}
+                {% for error in form.bank_name.errors %}
+                <p class="field-error">{{ error }}</p>
+                {% endfor %}
+            {% endif %}
+        </div>
+
+        <div class="field">
+            <label for="id_account_holder">{{ form.account_holder.label }} *</label>
+            {{ form.account_holder }}
+            {% if form.account_holder.errors %}
+                {% for error in form.account_holder.errors %}
+                <p class="field-error">{{ error }}</p>
+                {% endfor %}
+            {% endif %}
+        </div>
+
+        <div class="field">
+            <label for="id_account_number">{{ form.account_number.label }} *</label>
+            {{ form.account_number }}
+            {% if form.account_number.help_text %}
+            <p class="field-hint">{{ form.account_number.help_text }}</p>
+            {% endif %}
+            {% if form.account_number.errors %}
+                {% for error in form.account_number.errors %}
+                <p class="field-error">{{ error }}</p>
+                {% endfor %}
+            {% endif %}
+        </div>
+
+        <button type="submit" class="btn">Confirmar cuenta de destino</button>
+        <p class="transfer-form__note">
+            Solo transferencias a cuentas peruanas vía CCI/CCE. Verifica que los datos sean correctos.
+        </p>
+    </form>
+{% endblock %}

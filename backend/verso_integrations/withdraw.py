@@ -1,11 +1,34 @@
 """
-Withdrawal integration stubs for SEP-24 off-ramp (Tranche 2).
+Withdrawal helpers for SEP-24 off-ramp (USDC → PEN / USD).
 
-Implement WithdrawalIntegration subclass and register in apps.py.
+Payouts via CCI/CCE to the client's Peruvian bank account.
 """
 
+from decimal import Decimal
 
-def get_hot_wallet_address() -> str:
-    """Return VERSO Stellar hot wallet public key."""
-    # T2: read from env or KMS-backed config
-    return "G_REPLACE_WITH_HOT_WALLET_PUBLIC_KEY"
+from verso_integrations.sep24.fiat import normalize_fiat_currency
+
+FIAT_DECIMALS = Decimal("0.01")
+
+
+def compute_amount_fiat(amount_usdc: Decimal, rate_compra: Decimal) -> Decimal:
+    """Convert USDC to fiat using VERSO rate_compra (fiat per 1 USDC)."""
+    return (amount_usdc * rate_compra).quantize(FIAT_DECIMALS)
+
+
+def build_payout_bank_details(
+    *,
+    bank_name: str,
+    account_number: str,
+    account_holder: str,
+    fiat_currency: str,
+) -> dict:
+    """Normalize payout CCI details stored on Sep24WithdrawMeta."""
+    currency = normalize_fiat_currency(fiat_currency)
+    return {
+        "fiat_currency": currency,
+        "bank_name": bank_name.strip(),
+        "account_number": account_number.strip(),
+        "account_holder": account_holder.strip(),
+        "transfer_kind": "cci",
+    }

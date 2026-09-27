@@ -37,6 +37,19 @@ from verso_integrations.sep24.kyc_gate import (
 
 
 SEP24_INTERACTIVE_DEPOSIT_PATH = "/sep24/transactions/deposit/interactive"
+SEP24_INTERACTIVE_WITHDRAW_PATH = "/sep24/transactions/withdraw/interactive"
+
+
+def _interactive_path(transaction: Transaction) -> str:
+    if transaction.kind == Transaction.KIND.withdrawal:
+        return SEP24_INTERACTIVE_WITHDRAW_PATH
+    return SEP24_INTERACTIVE_DEPOSIT_PATH
+
+
+def _interactive_view_name(transaction: Transaction) -> str:
+    if transaction.kind == Transaction.KIND.withdrawal:
+        return "get_interactive_withdraw"
+    return "get_interactive_deposit"
 
 
 def _build_return_url(request: HttpRequest, transaction: Transaction) -> str:
@@ -55,7 +68,7 @@ def _sep24_interactive_jwt(request: HttpRequest, transaction: Transaction) -> st
     memo = transaction.account_memo
     sub = f"{account}:{memo}" if memo else account
     payload = {
-        "iss": request.build_absolute_uri(SEP24_INTERACTIVE_DEPOSIT_PATH),
+        "iss": request.build_absolute_uri(_interactive_path(transaction)),
         "iat": issued_at,
         "exp": issued_at + polaris_settings.INTERACTIVE_JWT_EXPIRATION,
         "sub": sub,
@@ -76,18 +89,24 @@ def _webapp_url(request: HttpRequest, transaction: Transaction) -> str:
     if amount is not None:
         params["amount"] = amount
     qparams = urlencode(params)
-    return request.build_absolute_uri(f"{reverse('get_interactive_deposit')}?{qparams}")
+    return request.build_absolute_uri(f"{reverse(_interactive_view_name(transaction))}?{qparams}")
 
 
-def _load_deposit_transaction(request: HttpRequest, transaction_id: str | None) -> Transaction:
+def _load_sep24_transaction(request: HttpRequest, transaction_id: str | None) -> Transaction:
     if not transaction_id:
         raise ValueError("transaction_id is required.")
     return get_object_or_404(
         Transaction,
         id=transaction_id,
-        kind=Transaction.KIND.deposit,
         protocol=Transaction.PROTOCOL.sep24,
     )
+
+
+def _load_deposit_transaction(request: HttpRequest, transaction_id: str | None) -> Transaction:
+    transaction = _load_sep24_transaction(request, transaction_id)
+    if transaction.kind != Transaction.KIND.deposit:
+        raise ValueError("Not a deposit transaction.")
+    return transaction
 
 
 def _onboarding_url(request: HttpRequest, transaction: Transaction) -> str:
@@ -160,7 +179,7 @@ def prepare_kyc_step(request: HttpRequest, transaction: Transaction) -> KycStepR
 
 def kyc_start(request: HttpRequest) -> HttpResponse:
     try:
-        transaction = _load_deposit_transaction(request, request.GET.get("transaction_id"))
+        transaction = _load_sep24_transaction(request, request.GET.get("transaction_id"))
     except ValueError as exc:
         return HttpResponseBadRequest(str(exc))
 
@@ -205,7 +224,7 @@ def _finalize_kyc(
 def kyc_poll(request: HttpRequest) -> JsonResponse:
     """Poll VERSO Core for DIDIT completion (iframe postMessage is unreliable on mobile QR)."""
     try:
-        transaction = _load_deposit_transaction(request, request.GET.get("transaction_id"))
+        transaction = _load_sep24_transaction(request, request.GET.get("transaction_id"))
     except ValueError as exc:
         return JsonResponse({"error": str(exc)}, status=400)
 
@@ -243,7 +262,7 @@ def kyc_poll(request: HttpRequest) -> JsonResponse:
 
 def kyc_callback(request: HttpRequest) -> HttpResponse:
     try:
-        transaction = _load_deposit_transaction(request, request.GET.get("transaction_id"))
+        transaction = _load_sep24_transaction(request, request.GET.get("transaction_id"))
     except ValueError as exc:
         return HttpResponseBadRequest(str(exc))
 
@@ -288,7 +307,6 @@ def onboarding_switch(request: HttpRequest) -> HttpResponse:
     transaction = get_object_or_404(
         Transaction,
         id=transaction_id,
-        kind=Transaction.KIND.deposit,
         protocol=Transaction.PROTOCOL.sep24,
     )
     if mode == "register":

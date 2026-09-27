@@ -3,7 +3,7 @@ from django.utils import timezone
 from django.db import transaction
 
 from verso_integrations.deposit import get_cci_deposit_instructions
-from verso_integrations.models import FiatDeposit, Sep24DepositMeta
+from verso_integrations.models import FiatDeposit, Sep24DepositMeta, Sep24WithdrawMeta
 from verso_integrations.stellar_payout import StellarPayoutError, disburse_usdc as send_usdc_on_chain
 
 
@@ -189,5 +189,61 @@ class Sep24DepositMetaAdmin(admin.ModelAdmin):
             self.message_user(
                 request,
                 f"{updated} SEP-24 deposit(s) marked as fiat received.",
+                level=messages.SUCCESS,
+            )
+
+
+@admin.register(Sep24WithdrawMeta)
+class Sep24WithdrawMetaAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "transaction",
+        "fiat_currency",
+        "amount_usdc",
+        "amount_pen",
+        "tipo_cambio",
+        "payout_confirmed_at",
+        "fiat_sent_at",
+        "created_at",
+    )
+    list_filter = ("fiat_currency", "fiat_sent_at", "payout_confirmed_at")
+    search_fields = (
+        "transaction__id",
+        "transaction__stellar_account",
+        "payout_bank_details",
+    )
+    readonly_fields = (
+        "transaction",
+        "fiat_currency",
+        "amount_usdc",
+        "amount_pen",
+        "tipo_cambio",
+        "sell_asset",
+        "buy_asset",
+        "payout_bank_details",
+        "payout_confirmed_at",
+        "fiat_sent_at",
+        "created_at",
+        "updated_at",
+    )
+    actions = ("mark_fiat_sent",)
+
+    @admin.action(description="Mark fiat sent (completes SEP-24 withdrawal)")
+    def mark_fiat_sent(self, request, queryset):
+        updated = 0
+        for meta in queryset:
+            if meta.fiat_sent_at is not None:
+                self.message_user(
+                    request,
+                    f"SEP-24 withdraw meta #{meta.pk}: skipped (already sent).",
+                    level=messages.WARNING,
+                )
+                continue
+            meta.mark_fiat_sent()
+            updated += 1
+        if updated:
+            self.message_user(
+                request,
+                f"{updated} SEP-24 withdrawal(s) marked as fiat sent.",
                 level=messages.SUCCESS,
             )

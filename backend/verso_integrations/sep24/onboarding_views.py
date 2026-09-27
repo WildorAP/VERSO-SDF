@@ -15,7 +15,7 @@ from django.urls import reverse
 from polaris.models import Transaction
 from rest_framework.request import Request
 
-from verso_integrations.models import Sep24DepositMeta
+from verso_integrations.models import Sep24DepositMeta, Sep24WithdrawMeta
 from verso_integrations.sep24.kyc_gate import (
     get_pending_verso_user,
     is_register_onboarding_flow,
@@ -26,6 +26,10 @@ from verso_integrations.sep24.kyc_views import (
     _webapp_url,
     didit_embed_origins_json,
     prepare_kyc_step,
+)
+from verso_integrations.sep24.onboarding_flow import (
+    after_onboarding_form_validation,
+    operate_step_for_transaction,
 )
 
 from verso_integrations.sep24.onboarding_forms import (
@@ -68,9 +72,16 @@ def _load_transaction(request: HttpRequest) -> Transaction:
     return get_object_or_404(
         Transaction,
         id=transaction_id,
-        kind=Transaction.KIND.deposit,
         protocol=Transaction.PROTOCOL.sep24,
     )
+
+
+def _has_operate_meta(transaction: Transaction) -> bool:
+    if transaction.kind == Transaction.KIND.deposit:
+        return Sep24DepositMeta.objects.filter(transaction=transaction).exists()
+    if transaction.kind == Transaction.KIND.withdrawal:
+        return Sep24WithdrawMeta.objects.filter(transaction=transaction).exists()
+    return False
 
 
 def _switch_url(request: HttpRequest, transaction: Transaction, mode: str) -> str:
@@ -84,17 +95,14 @@ def sep24_onboarding(request: HttpRequest) -> HttpResponse:
     except ValueError as exc:
         return HttpResponseBadRequest(str(exc))
 
-    if Sep24DepositMeta.objects.filter(transaction=transaction).exists():
+    if _has_operate_meta(transaction):
         return redirect(_webapp_url(request, transaction))
 
     step = onboarding_step(request, transaction)
-    if step == "deposit":
+    if step == operate_step_for_transaction(transaction):
         return redirect(_webapp_url(request, transaction))
 
     drf_request = _as_drf_request(request)
-    from verso_integrations.sep24.integration import VersoDepositIntegration
-
-    integration = VersoDepositIntegration()
     error = None
     profile_form = None
 
@@ -102,25 +110,25 @@ def sep24_onboarding(request: HttpRequest) -> HttpResponse:
         if step == "login":
             form = VersoLoginForm(request.POST, request=drf_request, transaction=transaction)
             if form.is_valid():
-                integration.after_form_validation(drf_request, form, transaction)
+                after_onboarding_form_validation(drf_request, form, transaction)
                 return redirect(onboarding_url(request, transaction))
             error = _first_form_error(form)
         elif step == "register":
             form = VersoRegisterForm(request.POST, request=drf_request, transaction=transaction)
             if form.is_valid():
-                integration.after_form_validation(drf_request, form, transaction)
+                after_onboarding_form_validation(drf_request, form, transaction)
                 return redirect(onboarding_url(request, transaction))
             error = _first_form_error(form)
         elif step == "verify_email":
             form = VersoVerifyEmailForm(request.POST, request=drf_request, transaction=transaction)
             if form.is_valid():
-                integration.after_form_validation(drf_request, form, transaction)
+                after_onboarding_form_validation(drf_request, form, transaction)
                 return redirect(onboarding_url(request, transaction))
             error = _first_form_error(form)
         elif step == "profile":
             profile_form = VersoProfileForm(request.POST, request=drf_request, transaction=transaction)
             if profile_form.is_valid():
-                integration.after_form_validation(drf_request, profile_form, transaction)
+                after_onboarding_form_validation(drf_request, profile_form, transaction)
                 return redirect(onboarding_url(request, transaction))
             error = _first_form_error(profile_form)
 

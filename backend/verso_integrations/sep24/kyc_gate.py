@@ -109,9 +109,18 @@ def is_register_onboarding_flow(request, transaction_id) -> bool:
 
 def sync_deposit_fiat_currency_from_request(request, transaction_id) -> str:
     """Persist selected fiat currency from the webapp query string into the SEP-24 session."""
+    return sync_fiat_currency_from_request(request, transaction_id)
+
+
+def sync_fiat_currency_from_request(request, transaction_id) -> str:
+    """Persist selected fiat currency from the webapp query string into the SEP-24 session."""
     from verso_integrations.sep24.fiat import normalize_fiat_currency
 
-    raw = request.GET.get("source_asset") or request.GET.get("fiat_currency")
+    raw = (
+        request.GET.get("source_asset")
+        or request.GET.get("destination_asset")
+        or request.GET.get("fiat_currency")
+    )
     if raw:
         currency = normalize_fiat_currency(raw)
         session_set(request, transaction_id, "fiat_currency", currency)
@@ -122,12 +131,20 @@ def sync_deposit_fiat_currency_from_request(request, transaction_id) -> str:
     return normalize_fiat_currency(None)
 
 
+def get_withdraw_fiat_currency(request, transaction_id, *, meta=None) -> str:
+    from verso_integrations.sep24.fiat import normalize_fiat_currency
+
+    if meta is not None:
+        return normalize_fiat_currency(meta.fiat_currency)
+    return sync_fiat_currency_from_request(request, transaction_id)
+
+
 def get_deposit_fiat_currency(request, transaction_id, *, meta=None) -> str:
     from verso_integrations.sep24.fiat import normalize_fiat_currency
 
     if meta is not None:
         return normalize_fiat_currency(meta.fiat_currency)
-    return sync_deposit_fiat_currency_from_request(request, transaction_id)
+    return sync_fiat_currency_from_request(request, transaction_id)
 
 
 def apply_verso_user_session(request, transaction_id, status) -> None:
@@ -272,7 +289,7 @@ def onboarding_step(request, transaction) -> str:
     """
     Next onboarding step inside the SEP-24 webview.
 
-    Returns one of: login | register | deposit | verify_email | profile | didit | pending | rejected
+    Returns one of: login | register | deposit | withdraw | verify_email | profile | didit | pending | rejected
     """
     kyc = lookup_client_kyc(
         transaction.stellar_account,
@@ -280,7 +297,9 @@ def onboarding_step(request, transaction) -> str:
         transaction_id=transaction.id,
     )
     if kyc.status == KYC_APPROVED:
-        return "deposit"
+        from verso_integrations.sep24.onboarding_flow import operate_step_for_transaction
+
+        return operate_step_for_transaction(transaction)
     if kyc.status == KYC_REJECTED:
         return "rejected"
     if kyc.status == KYC_PENDING:

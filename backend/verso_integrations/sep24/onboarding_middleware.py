@@ -6,10 +6,20 @@ from django.shortcuts import redirect
 from django.urls import reverse
 from polaris.models import Transaction
 
-from verso_integrations.models import Sep24DepositMeta
-from verso_integrations.sep24.kyc_gate import onboarding_step, sync_deposit_fiat_currency_from_request
+from verso_integrations.models import Sep24DepositMeta, Sep24WithdrawMeta
+from verso_integrations.sep24.kyc_gate import onboarding_step, sync_fiat_currency_from_request
+from verso_integrations.sep24.onboarding_flow import operate_step_for_transaction
 
-WEBAPP_PATH = "/sep24/transactions/deposit/webapp"
+WEBAPP_PATHS: dict[str, tuple] = {
+    "/sep24/transactions/deposit/webapp": (
+        Transaction.KIND.deposit,
+        Sep24DepositMeta,
+    ),
+    "/sep24/transactions/withdraw/webapp": (
+        Transaction.KIND.withdrawal,
+        Sep24WithdrawMeta,
+    ),
+}
 
 
 class Sep24OnboardingMiddleware:
@@ -17,26 +27,32 @@ class Sep24OnboardingMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
-        if request.path.startswith(WEBAPP_PATH):
+        for path_prefix, (kind, meta_model) in WEBAPP_PATHS.items():
+            if not request.path.startswith(path_prefix):
+                continue
+
             transaction_id = request.GET.get("transaction_id")
-            if transaction_id:
-                try:
-                    transaction = Transaction.objects.get(
-                        id=transaction_id,
-                        kind=Transaction.KIND.deposit,
-                        protocol=Transaction.PROTOCOL.sep24,
-                    )
-                except Transaction.DoesNotExist:
-                    return self.get_response(request)
+            if not transaction_id:
+                break
 
-                if Sep24DepositMeta.objects.filter(transaction=transaction).exists():
-                    return self.get_response(request)
+            try:
+                transaction = Transaction.objects.get(
+                    id=transaction_id,
+                    kind=kind,
+                    protocol=Transaction.PROTOCOL.sep24,
+                )
+            except Transaction.DoesNotExist:
+                return self.get_response(request)
 
-                sync_deposit_fiat_currency_from_request(request, transaction_id)
+            if meta_model.objects.filter(transaction=transaction).exists():
+                return self.get_response(request)
 
-                step = onboarding_step(request, transaction)
-                if step != "deposit":
-                    query = f"transaction_id={transaction_id}"
-                    return redirect(f"{reverse('sep24_onboarding')}?{query}")
+            sync_fiat_currency_from_request(request, transaction_id)
+
+            step = onboarding_step(request, transaction)
+            if step != operate_step_for_transaction(transaction):
+                query = f"transaction_id={transaction_id}"
+                return redirect(f"{reverse('sep24_onboarding')}?{query}")
+            break
 
         return self.get_response(request)

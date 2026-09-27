@@ -1,3 +1,5 @@
+"""SEP-24 deposit and withdrawal forms."""
+
 from decimal import Decimal
 
 from django import forms
@@ -101,3 +103,66 @@ class TransferAlreadyDeclaredForm(forms.Form):
     """No-op form so duplicate POSTs after confirming transfer do not 422."""
 
     acknowledge = forms.CharField(required=False, widget=forms.HiddenInput)
+
+
+class UsdcWithdrawForm(forms.Form):
+    """Collect USDC amount for off-ramp (USDC → PEN or USD)."""
+
+    amount_usdc = forms.DecimalField(
+        label="Monto en USDC",
+        min_value=Decimal("0.0000001"),
+        max_digits=18,
+        decimal_places=7,
+        widget=forms.TextInput(
+            attrs={
+                "id": "id_amount_usdc",
+                "inputmode": "decimal",
+                "placeholder": "0.0000000",
+                "autocomplete": "off",
+            }
+        ),
+    )
+
+    def __init__(self, *args, fiat_currency: str = "PEN", **kwargs):
+        self.fiat_currency = normalize_fiat_currency(fiat_currency)
+        config = fiat_config(self.fiat_currency)
+        super().__init__(*args, **kwargs)
+        self.fields["amount_usdc"].label = config.usdc_amount_label
+        self.fields["amount_usdc"].help_text = config.usdc_amount_help
+        self.fields["amount_usdc"].min_value = Decimal(config.min_usdc_amount)
+
+
+class PayoutBankForm(forms.Form):
+    """Collect the client's Peruvian bank account (CCI/CCE) for fiat payout."""
+
+    bank_name = forms.CharField(
+        label="Banco",
+        max_length=120,
+        widget=forms.TextInput(attrs={"autocomplete": "organization"}),
+    )
+    account_number = forms.CharField(
+        label="CCI (cuenta de destino)",
+        max_length=40,
+        help_text="Ingresa el CCI/CCE de tu cuenta en un banco peruano.",
+        widget=forms.TextInput(
+            attrs={
+                "inputmode": "numeric",
+                "autocomplete": "off",
+                "class": "copy-field__value--mono",
+            }
+        ),
+    )
+    account_holder = forms.CharField(
+        label="Titular de la cuenta",
+        max_length=120,
+        widget=forms.TextInput(attrs={"autocomplete": "name"}),
+    )
+
+    def clean_account_number(self):
+        value = (self.cleaned_data.get("account_number") or "").strip()
+        digits = value.replace(" ", "").replace("-", "")
+        if not digits.isdigit():
+            raise ValidationError("El CCI debe contener solo números.")
+        if len(digits) < 18:
+            raise ValidationError("Ingresa un CCI/CCE válido (mínimo 18 dígitos).")
+        return digits
