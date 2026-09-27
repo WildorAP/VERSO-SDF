@@ -1,0 +1,48 @@
+{% extends "sep24/onboarding/_base.html" %}
+{% block title %}Procesando verificación · Anchor VERSO{% endblock %}
+
+{% block content %}
+    <h1>Procesando verificación</h1>
+    <p class="lede">
+        DIDIT confirmó tu identidad. Estamos sincronizando con VERSO; en unos segundos
+        podrás continuar con el depósito PEN.
+    </p>
+
+    {% if email %}
+    <p class="meta">Cuenta: <strong>{{ email }}</strong></p>
+    {% endif %}
+
+    <p id="kyc-wait-status" class="didit-status" role="status">
+        Sincronizando verificación…
+    </p>
+
+    <p class="foot-link didit-fallback">
+        <a href="{{ onboarding_url }}">Volver al paso DIDIT</a>
+    </p>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function () {
+    var pollUrl = "{{ poll_url|escapejs }}";
+    var statusEl = document.getElementById("kyc-wait-status");
+
+    function poll() {
+        fetch(pollUrl, { credentials: "same-origin", headers: { Accept: "application/json" } })
+            .then(function (response) { return response.json(); })
+            .then(function (payload) {
+                if (payload.status === "approved" && payload.redirect) {
+                    if (statusEl) {
+                        statusEl.textContent = "Verificación confirmada. Redirigiendo…";
+                    }
+                    window.location.href = payload.redirect;
+                }
+            })
+            .catch(function () {});
+    }
+
+    setInterval(poll, 2500);
+    poll();
+})();
+</script>
+{% endblock %}

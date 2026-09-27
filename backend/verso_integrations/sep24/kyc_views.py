@@ -12,13 +12,13 @@ from urllib.parse import urlencode
 
 from django.conf import settings
 from django.http import HttpRequest, HttpResponse, HttpResponseBadRequest, JsonResponse
-from django.shortcuts import get_object_or_404, redirect
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from polaris.models import Transaction
 from polaris.sep24.utils import interactive_url
 from rest_framework.request import Request
 
-from verso_integrations.core_client import CoreClientError, kyc_handoff, user_status
+from verso_integrations.core_client import CoreClientError, kyc_handoff, sync_kyc, user_status
 from verso_integrations.sep24.kyc_gate import (
     clear_wants_register,
     get_pending_verso_user,
@@ -156,6 +156,34 @@ def kyc_start(request: HttpRequest) -> HttpResponse:
     return HttpResponseBadRequest("No se pudo iniciar la verificación DIDIT.")
 
 
+def _poll_url(request: HttpRequest, transaction: Transaction) -> str:
+    query = urlencode({"transaction_id": str(transaction.id)})
+    return request.build_absolute_uri(f"{reverse('sep24_kyc_poll')}?{query}")
+
+
+def _refresh_kyc_status(user_id: int | None, email: str) -> UserStatusResult:
+    if user_id:
+        try:
+            return sync_kyc(user_id=user_id)
+        except CoreClientError:
+            pass
+    return user_status(email=email)
+
+
+def _finalize_kyc(
+    request: HttpRequest,
+    transaction: Transaction,
+    *,
+    user_id: int | None,
+    email: str,
+) -> HttpResponse | None:
+    status = _refresh_kyc_status(user_id, email)
+    if status.kyc_completed:
+        mark_session_kyc_approved(request, transaction.id)
+        return redirect(_webapp_url(request, transaction))
+    return None
+
+
 def kyc_poll(request: HttpRequest) -> JsonResponse:
     """Poll VERSO Core for DIDIT completion (iframe postMessage is unreliable on mobile QR)."""
     try:
@@ -179,7 +207,7 @@ def kyc_poll(request: HttpRequest) -> JsonResponse:
         )
 
     try:
-        status = user_status(email=email)
+        status = _refresh_kyc_status(_user_id, email)
     except CoreClientError as exc:
         return JsonResponse({"error": str(exc)}, status=502)
 
@@ -201,23 +229,35 @@ def kyc_callback(request: HttpRequest) -> HttpResponse:
     except ValueError as exc:
         return HttpResponseBadRequest(str(exc))
 
-    _user_id, email = get_pending_verso_user(request, transaction.id)
+    user_id, email = get_pending_verso_user(request, transaction.id)
     if not email:
         return HttpResponseBadRequest(
             "Sesión de onboarding incompleta. Vuelve a iniciar sesión en VERSO."
         )
 
     try:
-        status = user_status(email=email)
+        finalized = _finalize_kyc(request, transaction, user_id=user_id, email=email)
     except CoreClientError as exc:
         return HttpResponseBadRequest(str(exc))
-
-    if status.kyc_completed:
-        mark_session_kyc_approved(request, transaction.id)
-        return redirect(_webapp_url(request, transaction))
+    if finalized is not None:
+        return finalized
 
     sync_kyc_from_core(request, transaction.id)
-    return redirect(_onboarding_url(request, transaction))
+    return render(
+        request,
+        "sep24/onboarding/kyc_wait.html",
+        {
+            "transaction": transaction,
+            "email": email,
+            "poll_url": _poll_url(request, transaction),
+            "onboarding_url": _onboarding_url(request, transaction),
+            "content_wide": True,
+            "show_rail": True,
+            "show_timeline": True,
+            "step": 3,
+            "step_title": "Verificación DIDIT",
+        },
+    )
 
 
 def onboarding_switch(request: HttpRequest) -> HttpResponse:

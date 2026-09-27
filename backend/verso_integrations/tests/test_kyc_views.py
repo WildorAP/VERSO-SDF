@@ -91,9 +91,9 @@ class KycViewTests(TestCase):
         session_key = f"sep24:{self.transaction.id}:kyc_approved"
         self.assertTrue(self.client.session.get(session_key))
 
-    @patch("verso_integrations.sep24.kyc_views.user_status")
-    def test_kyc_poll_returns_redirect_when_core_approves(self, mock_status):
-        mock_status.return_value = UserStatusResult(
+    @patch("verso_integrations.sep24.kyc_views._refresh_kyc_status")
+    def test_kyc_poll_returns_redirect_when_core_approves(self, mock_refresh):
+        mock_refresh.return_value = UserStatusResult(
             user_id=42,
             email="user@example.com",
             kyc_completed=True,
@@ -108,7 +108,7 @@ class KycViewTests(TestCase):
 
     def test_kyc_poll_pending_when_kyc_incomplete(self):
         with patch(
-            "verso_integrations.sep24.kyc_views.user_status",
+            "verso_integrations.sep24.kyc_views._refresh_kyc_status",
             return_value=UserStatusResult(
                 user_id=42,
                 email="user@example.com",
@@ -121,9 +121,9 @@ class KycViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["status"], "pending")
 
-    @patch("verso_integrations.sep24.kyc_views.user_status")
-    def test_kyc_callback_marks_kyc_when_core_confirms(self, mock_status):
-        mock_status.return_value = UserStatusResult(
+    @patch("verso_integrations.sep24.kyc_views._refresh_kyc_status")
+    def test_kyc_callback_marks_kyc_when_core_confirms(self, mock_refresh):
+        mock_refresh.return_value = UserStatusResult(
             user_id=42,
             email="user@example.com",
             kyc_completed=True,
@@ -143,9 +143,9 @@ class KycViewTests(TestCase):
         )
         self.assertEqual(response.status_code, 400)
 
-    def test_kyc_callback_redirects_to_webapp(self):
+    def test_kyc_callback_shows_wait_page_when_pending(self):
         with patch(
-            "verso_integrations.sep24.kyc_views.user_status",
+            "verso_integrations.sep24.kyc_views._refresh_kyc_status",
             return_value=UserStatusResult(
                 user_id=42,
                 email="user@example.com",
@@ -155,8 +155,8 @@ class KycViewTests(TestCase):
             response = self.client.get(
                 f"/sep24/kyc/callback/?transaction_id={self.transaction.id}"
             )
-        self.assertEqual(response.status_code, 302)
-        self.assertIn("/sep24/onboarding/", response["Location"])
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Procesando verificación")
 
     def test_kyc_start_requires_transaction_id(self):
         response = self.client.get("/sep24/kyc/start/")

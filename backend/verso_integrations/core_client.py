@@ -231,3 +231,29 @@ def kyc_handoff(*, user_id: int, return_url: str) -> KycHandoffResult:
     if not kyc_url:
         raise CoreClientError("VERSO Core did not return a KYC URL.")
     return KycHandoffResult(kyc_url=str(kyc_url), kyc_completed=False)
+
+
+def sync_kyc(*, user_id: int) -> UserStatusResult:
+    """Ask VERSO Core to pull the latest DIDIT session status for ``user_id``."""
+    try:
+        response = requests.post(
+            f"{_base_url()}/internal/kyc/sync/",
+            headers=_internal_headers(),
+            json={"user_id": user_id},
+            timeout=15,
+        )
+    except requests.RequestException as exc:
+        raise CoreClientError(f"Failed to sync KYC status: {exc}") from exc
+
+    if response.status_code == 404:
+        raise CoreClientError("KYC sync endpoint is not available on VERSO Core.")
+    if response.status_code != 200:
+        try:
+            detail = response.json().get("error", "")
+        except ValueError:
+            detail = ""
+        raise CoreClientError(
+            detail or f"Could not sync KYC status (HTTP {response.status_code})."
+        )
+
+    return _parse_user_status(response.json())
