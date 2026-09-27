@@ -1,5 +1,5 @@
 """
-SEP-24 deposit integration — PEN on-ramp MVP (Etapa 3) + onboarding/KYC gate (Etapa 4).
+SEP-24 deposit integration — fiat on-ramp (PEN / USD) + onboarding/KYC gate.
 """
 
 from __future__ import annotations
@@ -18,23 +18,22 @@ from polaris.templates import Template
 from rest_framework.request import Request
 from urllib.parse import urlencode
 
-from verso_integrations.deposit import compute_amount_usdc, get_cci_deposit_instructions
+from verso_integrations.deposit import compute_amount_usdc, get_deposit_instructions
 from verso_integrations.models import Sep24DepositMeta
-from verso_integrations.polaris_setup import (
-    DELIVERY_PEN_SELL,
-    pen_asset_identification,
-    usdc_asset_identification,
-)
-from verso_integrations.rates import RatesError, get_pen_usdc_rate
+from verso_integrations.polaris_setup import usdc_asset_identification
+from verso_integrations.rates import RatesError
 from verso_integrations.root import stellar_expert_tx_url
+from verso_integrations.sep24.fiat import fiat_config
 from verso_integrations.sep24.transaction_views import TERMINAL_TRANSACTION_STATUSES
 from verso_integrations.sep24.forms import (
     BankTransferReceiptForm,
+    FiatDepositForm,
     PenDepositForm,
     TransferAlreadyDeclaredForm,
 )
 from verso_integrations.sep24.kyc_gate import (
     apply_verso_user_session,
+    get_deposit_fiat_currency,
     get_pending_verso_user,
     is_email_verified,
     lookup_client_kyc,
@@ -45,6 +44,7 @@ from verso_integrations.sep24.kyc_gate import (
     mark_session_kyc_approved,
     onboarding_step,
     set_pending_verso_user,
+    sync_deposit_fiat_currency_from_request,
     sync_kyc_from_core,
 )
 from verso_integrations.sep24.onboarding_forms import (
@@ -58,13 +58,44 @@ from verso_integrations.sep24.onboarding_forms import (
 
 
 def _format_bank_guidance(instructions: dict) -> str:
+    currency = instructions.get("fiat_currency", "PEN")
+    amount = instructions.get("amount_fiat", instructions.get("amount_pen"))
+    rate = instructions.get(
+        "tipo_cambio_fiat_per_usdc", instructions.get("tipo_cambio_pen_per_usdc")
+    )
     return (
-        f"Transfiere {instructions['amount_pen']} PEN a {instructions['bank_name']} "
+        f"Transfiere {amount} {currency} a {instructions['bank_name']} "
         f"cuenta {instructions['account_number']}. "
         f"Referencia: {instructions['reference']}. "
         f"Recibirás {instructions['amount_usdc']} USDC @ "
-        f"{instructions['tipo_cambio_pen_per_usdc']} PEN/USDC."
+        f"{rate} {currency}/USDC."
     )
+
+
+def _meta_display_context(meta: Sep24DepositMeta) -> dict:
+    config = fiat_config(meta.fiat_currency)
+    return {
+        "fiat_currency": meta.fiat_currency,
+        "fiat_symbol": config.symbol,
+        "pair_label": config.pair_label,
+        "transfer_kind": "cci",
+        "amount_fiat": meta.amount_pen,
+        "amount_pen": meta.amount_pen,
+        "amount_usdc": meta.amount_usdc,
+        "tipo_cambio": meta.tipo_cambio,
+        "bank_instructions": meta.bank_instructions,
+    }
+
+
+def _deposit_switch_url(request: Request, transaction: Transaction, currency: str) -> str:
+    query = urlencode(
+        {
+            "transaction_id": str(transaction.id),
+            "asset_code": transaction.asset.code,
+            "source_asset": fiat_config(currency).asset_identification,
+        }
+    )
+    return request.build_absolute_uri(f"{reverse('get_interactive_deposit')}?{query}")
 
 
 def _onboarding_url(request: Request, transaction: Transaction) -> str:
@@ -102,7 +133,9 @@ def _deposit_wait_status_message(
     ):
         return "Depósito confirmado. Enviando USDC a tu wallet…"
     messages = {
-        Transaction.STATUS.pending_user_transfer_start: "Verificando depósito en soles…",
+        Transaction.STATUS.pending_user_transfer_start: fiat_config(
+            meta.fiat_currency
+        ).verifying_message,
         Transaction.STATUS.pending_anchor: "Depósito confirmado. Enviando USDC a tu wallet…",
         Transaction.STATUS.pending_stellar: "Enviando USDC on-chain…",
         Transaction.STATUS.pending_external: "Procesando depósito…",
@@ -116,9 +149,6 @@ def _deposit_waiting_content(request: Request, transaction: Transaction, meta: S
     stellar_tx_id = transaction.stellar_transaction_id or ""
     base.update(
         {
-            "bank_instructions": meta.bank_instructions,
-            "amount_pen": meta.amount_pen,
-            "amount_usdc": meta.amount_usdc,
             "show_rail": True,
             "show_timeline": False,
             "receipt_uploaded": bool(meta.transfer_receipt),
@@ -133,6 +163,7 @@ def _deposit_waiting_content(request: Request, transaction: Transaction, meta: S
                 f"{reverse('sep24_transaction_poll')}?{poll_query}"
             ),
             "template_name": "sep24/onboarding/deposit_waiting.html",
+            **_meta_display_context(meta),
         }
     )
     return base
@@ -144,17 +175,14 @@ def _deposit_transfer_content(meta: Sep24DepositMeta, base: dict) -> dict:
             "template_name": "sep24/onboarding/deposit_transfer.html",
             "show_rail": True,
             "show_timeline": False,
-            "bank_instructions": meta.bank_instructions,
-            "amount_pen": meta.amount_pen,
-            "amount_usdc": meta.amount_usdc,
-            "tipo_cambio": meta.tipo_cambio,
+            **_meta_display_context(meta),
         }
     )
     return base
 
 
 class VersoDepositIntegration(DepositIntegration):
-    """Interactive SEP-24 on-ramp: onboarding/KYC → PEN (CCI/CCE) → USDC."""
+    """Interactive SEP-24 on-ramp: onboarding/KYC → PEN or USD → USDC."""
 
     def after_deposit(self, transaction: Transaction, *args, **kwargs):
         return None
@@ -189,12 +217,13 @@ class VersoDepositIntegration(DepositIntegration):
                 return KycStatusForm(post_data)
             return KycStatusForm()
         if step == "deposit":
+            currency = get_deposit_fiat_currency(request, transaction.id) if request and transaction else "PEN"
             initial = {}
             if amount is not None:
-                initial["amount_pen"] = amount
+                initial["amount_fiat"] = amount
             if post_data is not None:
-                return PenDepositForm(post_data)
-            return PenDepositForm(initial=initial or None)
+                return FiatDepositForm(post_data, fiat_currency=currency)
+            return FiatDepositForm(initial=initial or None, fiat_currency=currency)
         return None
 
     def form_for_transaction(
@@ -206,6 +235,9 @@ class VersoDepositIntegration(DepositIntegration):
         *args,
         **kwargs,
     ) -> Optional[forms.Form]:
+        if request is not None:
+            sync_deposit_fiat_currency_from_request(request, transaction.id)
+
         try:
             meta = transaction.verso_deposit_meta
         except Sep24DepositMeta.DoesNotExist:
@@ -264,8 +296,8 @@ class VersoDepositIntegration(DepositIntegration):
                 return
             mark_profile_completed(request, transaction.id)
             return
-        if isinstance(form, PenDepositForm):
-            self._handle_pen_deposit(request, form, transaction)
+        if isinstance(form, (PenDepositForm, FiatDepositForm)):
+            self._handle_fiat_deposit(request, form, transaction)
             return
         if isinstance(form, BankTransferReceiptForm):
             self._handle_bank_transfer_confirmation(request, form, transaction)
@@ -273,10 +305,10 @@ class VersoDepositIntegration(DepositIntegration):
         if isinstance(form, TransferAlreadyDeclaredForm):
             return
 
-    def _handle_pen_deposit(
+    def _handle_fiat_deposit(
         self,
         request: Request,
-        form: PenDepositForm,
+        form: PenDepositForm | FiatDepositForm,
         transaction: Transaction,
     ) -> None:
         kyc = lookup_client_kyc(
@@ -291,14 +323,21 @@ class VersoDepositIntegration(DepositIntegration):
             )
             return
 
-        rate = get_pen_usdc_rate()
-        amount_pen = form.cleaned_data["amount_pen"].quantize(Decimal("0.01"))
-        amount_usdc = compute_amount_usdc(amount_pen, rate.rate_venta)
+        currency = get_deposit_fiat_currency(request, transaction.id)
+        config = fiat_config(currency)
+        try:
+            rate = config.rate_fetcher()
+        except RatesError as exc:
+            form.add_error(None, f"No pudimos obtener el tipo de cambio: {exc}")
+            return
 
-        pen_id = pen_asset_identification()
+        amount_fiat = form.cleaned_data["amount_fiat"].quantize(Decimal("0.01"))
+        amount_usdc = compute_amount_usdc(amount_fiat, rate.rate_venta)
+
+        fiat_id = config.asset_identification
         usdc_id = usdc_asset_identification()
         sell_method = DeliveryMethod.objects.get(
-            name=DELIVERY_PEN_SELL,
+            name=config.delivery_method,
             type=DeliveryMethod.TYPE.sell,
         )
 
@@ -307,16 +346,17 @@ class VersoDepositIntegration(DepositIntegration):
             stellar_account=transaction.stellar_account,
             muxed_account=transaction.muxed_account,
             account_memo=transaction.account_memo,
-            sell_asset=pen_id,
+            sell_asset=fiat_id,
             buy_asset=usdc_id,
-            sell_amount=amount_pen,
+            sell_amount=amount_fiat,
             buy_amount=amount_usdc,
             price=rate.rate_venta.quantize(Decimal("0.01")),
             sell_delivery_method=sell_method,
         )
 
-        instructions = get_cci_deposit_instructions(
-            float(amount_pen),
+        instructions = get_deposit_instructions(
+            currency,
+            float(amount_fiat),
             str(transaction.id),
             tipo_cambio=float(rate.rate_venta),
             amount_usdc=float(amount_usdc),
@@ -324,20 +364,21 @@ class VersoDepositIntegration(DepositIntegration):
 
         Sep24DepositMeta.objects.create(
             transaction=transaction,
-            amount_pen=amount_pen,
+            fiat_currency=currency,
+            amount_pen=amount_fiat,
             tipo_cambio=rate.rate_venta,
             amount_usdc=amount_usdc,
-            sell_asset=pen_id,
+            sell_asset=fiat_id,
             buy_asset=usdc_id,
             bank_instructions=instructions,
         )
 
         transaction.quote = quote
-        transaction.amount_in = amount_pen
-        transaction.amount_expected = amount_pen
+        transaction.amount_in = amount_fiat
+        transaction.amount_expected = amount_fiat
         transaction.amount_out = amount_usdc
         transaction.amount_fee = Decimal("0")
-        transaction.fee_asset = pen_id
+        transaction.fee_asset = fiat_id
         transaction.to_address = transaction.stellar_account
         transaction.status = Transaction.STATUS.pending_user_transfer_start
         transaction.save()
@@ -371,7 +412,7 @@ class VersoDepositIntegration(DepositIntegration):
         base = {
             "icon_label": "VERSO",
             "icon_path": "sep24/img/verso-logo.png",
-            "title": "Depósito PEN → USDC",
+            "title": "Depósito → USDC",
         }
 
         if transaction is not None:
@@ -397,7 +438,7 @@ class VersoDepositIntegration(DepositIntegration):
             register_url = _onboarding_switch_url(request, transaction, "register")
             base["title"] = "Inicia sesión en VERSO"
             base["guidance"] = (
-                "Ingresa con tu cuenta VERSO para operar PEN → USDC con la wallet "
+                "Ingresa con tu cuenta VERSO para operar PEN o USD → USDC con la wallet "
                 f"{transaction.stellar_account[:8]}… de esta sesión. "
                 f'¿Aún no tienes cuenta? <a href="{register_url}">Crear cuenta</a>'
             )
@@ -407,7 +448,7 @@ class VersoDepositIntegration(DepositIntegration):
             login_url = _onboarding_switch_url(request, transaction, "login")
             base["title"] = "Crea tu cuenta VERSO"
             base["guidance"] = (
-                "Regístrate para operar PEN → USDC. Usaremos la wallet "
+                "Regístrate para operar PEN o USD → USDC. Usaremos la wallet "
                 f"{transaction.stellar_account[:8]}… con la que abriste esta sesión. "
                 f'¿Ya tienes cuenta? <a href="{login_url}">Iniciar sesión</a>'
             )
@@ -450,9 +491,11 @@ class VersoDepositIntegration(DepositIntegration):
                 )
             return base
 
-        if isinstance(form, PenDepositForm):
+        if isinstance(form, (PenDepositForm, FiatDepositForm)):
+            currency = get_deposit_fiat_currency(request, transaction.id)
+            config = fiat_config(currency)
             try:
-                rate = get_pen_usdc_rate()
+                rate = config.rate_fetcher()
             except RatesError:
                 rate = None
             base.update(
@@ -461,11 +504,17 @@ class VersoDepositIntegration(DepositIntegration):
                     "show_rail": True,
                     "show_timeline": False,
                     "wallet_short": f"{transaction.stellar_account[:8]}…",
+                    "fiat_currency": currency,
+                    "fiat_symbol": config.symbol,
+                    "pair_label": config.pair_label,
+                    "pen_switch_url": _deposit_switch_url(request, transaction, "PEN"),
+                    "usd_switch_url": _deposit_switch_url(request, transaction, "USD"),
                     "rate_venta": str(rate.rate_venta) if rate else "",
                     "rate_venta_display": (
                         f"{rate.rate_venta.quantize(Decimal('0.0001'))}" if rate else ""
                     ),
                     "rate_unavailable": rate is None,
+                    "min_fiat_amount": config.min_amount,
                 }
             )
             return base

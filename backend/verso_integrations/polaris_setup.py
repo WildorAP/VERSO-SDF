@@ -18,12 +18,12 @@ PEN_COUNTRY_CODES = "PER"
 
 USD_SCHEME = "iso4217"
 USD_IDENTIFIER = "USD"
-USD_COUNTRY_CODES = "USA,PER"
+USD_COUNTRY_CODES = "PER"
 
 DELIVERY_PEN_SELL = "bank_transfer_cci_cce"
 DELIVERY_PEN_BUY = "bank_transfer_cci_cce"
-DELIVERY_USD_SELL = "wire_usd"
-DELIVERY_USD_BUY = "wire_usd"
+DELIVERY_USD_SELL = DELIVERY_PEN_SELL
+DELIVERY_USD_BUY = DELIVERY_PEN_BUY
 
 
 def usdc_issuer() -> str:
@@ -89,20 +89,6 @@ def seed_polaris_t2(*, distribution_seed: str | None = None) -> dict[str, str]:
             "description": "Recepción de PEN en cuenta bancaria peruana vía CCI/CCE.",
         },
     )
-    usd_sell_method, _ = DeliveryMethod.objects.update_or_create(
-        name=DELIVERY_USD_SELL,
-        type=DeliveryMethod.TYPE.sell,
-        defaults={
-            "description": "Transferencia USD (wire) a cuenta VERSO verificada.",
-        },
-    )
-    usd_buy_method, _ = DeliveryMethod.objects.update_or_create(
-        name=DELIVERY_USD_BUY,
-        type=DeliveryMethod.TYPE.buy,
-        defaults={
-            "description": "Recepción de USD en cuenta bancaria verificada (wire).",
-        },
-    )
 
     pen_asset, pen_created = OffChainAsset.objects.update_or_create(
         scheme=PEN_SCHEME,
@@ -124,7 +110,7 @@ def seed_polaris_t2(*, distribution_seed: str | None = None) -> dict[str, str]:
             "symbol": "$",
         },
     )
-    usd_asset.delivery_methods.set([usd_sell_method, usd_buy_method])
+    usd_asset.delivery_methods.set([pen_sell_method, pen_buy_method])
 
     pen_to_usdc, pen_on_created = ExchangePair.objects.update_or_create(
         sell_asset=pen_id,

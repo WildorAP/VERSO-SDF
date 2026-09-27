@@ -19,14 +19,14 @@
         Registramos tu confirmación. Estamos verificando el depósito en soles.
         {% endif %}
         {% if transaction_status != "completed" %}
-        Te enviaremos <strong>{{ amount_usdc }} USDC</strong> en cuanto confirmemos los S/ {{ amount_pen }}.
+        Te enviaremos <strong>{{ amount_usdc }} USDC</strong> en cuanto confirmemos los {{ fiat_symbol }} {{ amount_fiat }}.
         {% endif %}
     </p>
 
     <div class="transfer-summary">
         <div class="transfer-summary__row">
             <span>Monto enviado</span>
-            <strong>S/ {{ amount_pen }}</strong>
+            <strong>{{ fiat_symbol }} {{ amount_fiat }}</strong>
         </div>
         <div class="transfer-summary__row transfer-summary__row--highlight">
             <span>USDC a recibir</span>

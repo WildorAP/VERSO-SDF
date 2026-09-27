@@ -63,6 +63,7 @@ class FiatDepositAdmin(admin.ModelAdmin):
                 str(obj.pk),
                 tipo_cambio=float(obj.tipo_cambio),
                 amount_usdc=float(obj.amount_usdc),
+                fiat_currency="PEN",
             )
             obj.save(update_fields=["bank_instructions"])
 
@@ -144,6 +145,7 @@ class Sep24DepositMetaAdmin(admin.ModelAdmin):
     list_display = (
         "id",
         "transaction",
+        "fiat_currency",
         "amount_pen",
         "tipo_cambio",
         "amount_usdc",
@@ -155,6 +157,7 @@ class Sep24DepositMetaAdmin(admin.ModelAdmin):
     search_fields = ("transaction__id", "transaction__stellar_account")
     readonly_fields = (
         "transaction",
+        "fiat_currency",
         "amount_pen",
         "tipo_cambio",
         "amount_usdc",
@@ -169,7 +172,7 @@ class Sep24DepositMetaAdmin(admin.ModelAdmin):
     )
     actions = ("mark_fiat_received",)
 
-    @admin.action(description="Mark PEN received (enables Polaris rails poll)")
+    @admin.action(description="Mark fiat received (enables Polaris rails poll)")
     def mark_fiat_received(self, request, queryset):
         updated = 0
         for meta in queryset:
@@ -185,6 +188,6 @@ class Sep24DepositMetaAdmin(admin.ModelAdmin):
         if updated:
             self.message_user(
                 request,
-                f"{updated} SEP-24 deposit(s) marked as PEN received.",
+                f"{updated} SEP-24 deposit(s) marked as fiat received.",
                 level=messages.SUCCESS,
             )

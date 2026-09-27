@@ -63,8 +63,8 @@ def return_toml_contents(request, *args, **kwargs):
             ),
             _usdc_currency(
                 "USD",
-                "USDC on-ramp/off-ramp via CCI/CCE — PSAV Peru",
-                "Withdraw USDC via SEP-24; receive USD by wire to your verified USD bank account.",
+                "USDC on-ramp/off-ramp vía dólares en cuentas peruanas (CCI/CCE) — PSAV Perú",
+                "Withdraw USDC via SEP-24; receive USD by CCI/CCE transfer to your Peruvian bank account.",
             ),
         ],
         "DOCUMENTATION": {

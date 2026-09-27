@@ -7,7 +7,7 @@ from django.urls import reverse
 from polaris.models import Transaction
 
 from verso_integrations.models import Sep24DepositMeta
-from verso_integrations.sep24.kyc_gate import onboarding_step
+from verso_integrations.sep24.kyc_gate import onboarding_step, sync_deposit_fiat_currency_from_request
 
 WEBAPP_PATH = "/sep24/transactions/deposit/webapp"
 
@@ -31,6 +31,8 @@ class Sep24OnboardingMiddleware:
 
                 if Sep24DepositMeta.objects.filter(transaction=transaction).exists():
                     return self.get_response(request)
+
+                sync_deposit_fiat_currency_from_request(request, transaction_id)
 
                 step = onboarding_step(request, transaction)
                 if step != "deposit":

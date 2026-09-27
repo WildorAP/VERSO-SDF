@@ -4,17 +4,18 @@
     return;
   }
 
-  var input = document.getElementById("id_amount_pen");
-  var sendEl = document.getElementById("quote-send-pen");
+  var input = document.getElementById("id_amount_fiat");
+  var sendEl = document.getElementById("quote-send-fiat");
   var receiveEl = document.getElementById("quote-receive-usdc");
   if (!input || !sendEl || !receiveEl) {
     return;
   }
 
   var rateVenta = Number(config.rateVenta);
-  var minPen = Number(config.minPen || 1);
+  var minFiat = Number(config.minFiat || 1);
+  var fiatSymbol = config.fiatSymbol || "S/";
 
-  function parsePen(raw) {
+  function parseAmount(raw) {
     var normalized = String(raw || "")
       .trim()
       .replace(/\s/g, "")
@@ -29,9 +30,10 @@
     return value;
   }
 
-  function formatPen(value) {
+  function formatFiat(value) {
     return (
-      "S/ " +
+      fiatSymbol +
+      " " +
       value.toLocaleString("es-PE", {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
@@ -50,18 +52,18 @@
   }
 
   function resetQuote() {
-    sendEl.textContent = "S/ —";
+    sendEl.textContent = fiatSymbol + " —";
     receiveEl.textContent = "— USDC";
   }
 
   function updateQuote() {
-    var pen = parsePen(input.value);
-    if (pen === null || pen < minPen) {
+    var amount = parseAmount(input.value);
+    if (amount === null || amount < minFiat) {
       resetQuote();
       return;
     }
-    sendEl.textContent = formatPen(pen);
-    receiveEl.textContent = formatUsdc(pen / rateVenta);
+    sendEl.textContent = formatFiat(amount);
+    receiveEl.textContent = formatUsdc(amount / rateVenta);
   }
 
   input.addEventListener("input", updateQuote);

@@ -81,17 +81,18 @@ class MoreInfoAutoRefreshTests(TestCase):
         self.integration = VersoDepositIntegration()
         self.request = MagicMock()
         self.request.build_absolute_uri.side_effect = lambda path: f"http://testserver{path}"
+        self.request.GET = {}
         self.transaction = _create_deposit_transaction(Keypair.random().public_key)
 
-    @patch("verso_integrations.sep24.integration.get_pen_usdc_rate")
+    @patch("verso_integrations.sep24.fiat.get_pen_usdc_rate")
     def test_more_info_context_includes_poll_url_and_template(self, mock_rate):
         from verso_integrations.rates import FiatUsdcRate
-        from verso_integrations.sep24.forms import PenDepositForm
+        from verso_integrations.sep24.forms import FiatDepositForm
 
         mock_rate.return_value = FiatUsdcRate(
             rate_venta=Decimal("4.0000"), rate_compra=Decimal("3.9500")
         )
-        form = PenDepositForm({"amount_pen": "50.00"})
+        form = FiatDepositForm({"amount_fiat": "50.00"})
         self.assertTrue(form.is_valid())
         self.integration.after_form_validation(self.request, form, self.transaction)
         meta = Sep24DepositMeta.objects.get(transaction=self.transaction)
@@ -111,15 +112,15 @@ class MoreInfoAutoRefreshTests(TestCase):
         self.assertTrue(content["poll_enabled"])
         self.assertEqual(content["transaction_status"], "pending_user_transfer_start")
 
-    @patch("verso_integrations.sep24.integration.get_pen_usdc_rate")
+    @patch("verso_integrations.sep24.fiat.get_pen_usdc_rate")
     def test_deposit_waiting_skips_poll_when_completed(self, mock_rate):
         from verso_integrations.rates import FiatUsdcRate
-        from verso_integrations.sep24.forms import PenDepositForm
+        from verso_integrations.sep24.forms import FiatDepositForm
 
         mock_rate.return_value = FiatUsdcRate(
             rate_venta=Decimal("4.0000"), rate_compra=Decimal("3.9500")
         )
-        form = PenDepositForm({"amount_pen": "50.00"})
+        form = FiatDepositForm({"amount_fiat": "50.00"})
         self.assertTrue(form.is_valid())
         self.integration.after_form_validation(self.request, form, self.transaction)
         meta = Sep24DepositMeta.objects.get(transaction=self.transaction)
@@ -141,16 +142,16 @@ class MoreInfoAutoRefreshTests(TestCase):
         self.assertEqual(content["status_message"], "Operación finalizada")
         self.assertEqual(content["stellar_transaction_id"], "abc123stellarhash")
 
-    @patch("verso_integrations.sep24.integration.get_pen_usdc_rate")
+    @patch("verso_integrations.sep24.fiat.get_pen_usdc_rate")
     def test_deposit_waiting_completed_template_has_no_poll_script(self, mock_rate):
         from django.template.loader import render_to_string
         from verso_integrations.rates import FiatUsdcRate
-        from verso_integrations.sep24.forms import PenDepositForm
+        from verso_integrations.sep24.forms import FiatDepositForm
 
         mock_rate.return_value = FiatUsdcRate(
             rate_venta=Decimal("4.0000"), rate_compra=Decimal("3.9500")
         )
-        form = PenDepositForm({"amount_pen": "50.00"})
+        form = FiatDepositForm({"amount_fiat": "50.00"})
         self.assertTrue(form.is_valid())
         self.integration.after_form_validation(self.request, form, self.transaction)
         meta = Sep24DepositMeta.objects.get(transaction=self.transaction)
@@ -181,7 +182,7 @@ class MoreInfoAutoRefreshTests(TestCase):
         self.assertNotIn("deposit_wait_poll.js", html)
         self.assertNotIn("deposit-wait-poll-root", html)
 
-    @patch("verso_integrations.sep24.integration.get_pen_usdc_rate")
+    @patch("verso_integrations.sep24.fiat.get_pen_usdc_rate")
     def test_transfer_template_renders_cci_copy_fields(self, mock_rate):
         from django.template.loader import render_to_string
         from verso_integrations.models import Sep24DepositMeta

@@ -107,6 +107,29 @@ def is_register_onboarding_flow(request, transaction_id) -> bool:
     return session_get(request, transaction_id, "onboarding_flow") == "register"
 
 
+def sync_deposit_fiat_currency_from_request(request, transaction_id) -> str:
+    """Persist selected fiat currency from the webapp query string into the SEP-24 session."""
+    from verso_integrations.sep24.fiat import normalize_fiat_currency
+
+    raw = request.GET.get("source_asset") or request.GET.get("fiat_currency")
+    if raw:
+        currency = normalize_fiat_currency(raw)
+        session_set(request, transaction_id, "fiat_currency", currency)
+        return currency
+    stored = session_get(request, transaction_id, "fiat_currency")
+    if stored:
+        return normalize_fiat_currency(stored)
+    return normalize_fiat_currency(None)
+
+
+def get_deposit_fiat_currency(request, transaction_id, *, meta=None) -> str:
+    from verso_integrations.sep24.fiat import normalize_fiat_currency
+
+    if meta is not None:
+        return normalize_fiat_currency(meta.fiat_currency)
+    return sync_deposit_fiat_currency_from_request(request, transaction_id)
+
+
 def apply_verso_user_session(request, transaction_id, status) -> None:
     """Persist Core user status in the SEP-24 session after login/register."""
     set_pending_verso_user(

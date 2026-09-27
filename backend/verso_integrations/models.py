@@ -14,18 +14,33 @@ def validate_stellar_public_key(value: str) -> None:
 
 
 class Sep24DepositMeta(models.Model):
-    """PEN on-ramp metadata linked to a Polaris SEP-24 Transaction."""
+    """Fiat on-ramp metadata linked to a Polaris SEP-24 Transaction."""
+
+    class FiatCurrency(models.TextChoices):
+        PEN = "PEN", "PEN"
+        USD = "USD", "USD"
 
     transaction = models.OneToOneField(
         "polaris.Transaction",
         on_delete=models.CASCADE,
         related_name="verso_deposit_meta",
     )
-    amount_pen = models.DecimalField(max_digits=18, decimal_places=2)
+    fiat_currency = models.CharField(
+        max_length=3,
+        choices=FiatCurrency.choices,
+        default=FiatCurrency.PEN,
+        db_index=True,
+        help_text="Fiat currency sold by the client in this SEP-24 on-ramp.",
+    )
+    amount_pen = models.DecimalField(
+        max_digits=18,
+        decimal_places=2,
+        help_text="Fiat amount the client should transfer (PEN or USD).",
+    )
     tipo_cambio = models.DecimalField(max_digits=12, decimal_places=4)
     amount_usdc = models.DecimalField(max_digits=18, decimal_places=7)
     sell_asset = models.TextField(
-        help_text="SEP-38 asset id for fiat sold by user (iso4217:PEN).",
+        help_text="SEP-38 asset id for fiat sold by user (iso4217:PEN or iso4217:USD).",
     )
     buy_asset = models.TextField(
         help_text="SEP-38 asset id received on-chain (stellar:USDC:...).",
@@ -41,19 +56,23 @@ class Sep24DepositMeta(models.Model):
         null=True,
         blank=True,
         db_index=True,
-        help_text="When the client confirmed they sent the PEN transfer.",
+        help_text="When the client confirmed they sent the fiat transfer.",
     )
     fiat_confirmed_at = models.DateTimeField(null=True, blank=True, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        verbose_name = "SEP-24 deposit (PEN on-ramp)"
-        verbose_name_plural = "SEP-24 deposits (PEN on-ramp)"
+        verbose_name = "SEP-24 deposit (fiat on-ramp)"
+        verbose_name_plural = "SEP-24 deposits (fiat on-ramp)"
+
+    @property
+    def amount_fiat(self) -> Decimal:
+        return self.amount_pen
 
     def __str__(self) -> str:
         return (
-            f"SEP-24 {self.transaction_id} — {self.amount_pen} PEN "
+            f"SEP-24 {self.transaction_id} — {self.amount_pen} {self.fiat_currency} "
             f"→ {self.amount_usdc} USDC"
         )
 

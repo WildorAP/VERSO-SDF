@@ -134,10 +134,13 @@ VERSO_CORE_API_KEY = env("VERSO_CORE_API_KEY", default="")
 # Firm SEP-38 quote TTL (seconds). Client expire_after cannot exceed this window.
 VERSO_QUOTE_TTL_SECONDS = env.int("VERSO_QUOTE_TTL_SECONDS", default=900)
 
-# SEP-24 CCI deposit instructions (Etapa 3+).
+# SEP-24 CCI/CCE deposit instructions (Perú — one CCI per fiat currency).
 VERSO_CCI_BANK_NAME = env("VERSO_CCI_BANK_NAME", default="BCP")
 VERSO_CCI_ACCOUNT_NUMBER = env("VERSO_CCI_ACCOUNT_NUMBER", default="XXXXXXXX")
 VERSO_CCI_ACCOUNT_HOLDER = env("VERSO_CCI_ACCOUNT_HOLDER", default="VERSO PERU")
+VERSO_USD_CCI_BANK_NAME = env("VERSO_USD_CCI_BANK_NAME", default="BCP")
+VERSO_USD_CCI_ACCOUNT_NUMBER = env("VERSO_USD_CCI_ACCOUNT_NUMBER", default="YYYYYYYY")
+VERSO_USD_CCI_ACCOUNT_HOLDER = env("VERSO_USD_CCI_ACCOUNT_HOLDER", default="VERSO PERU")
 
 LOCAL_MODE = env.bool("LOCAL_MODE", default=False)
 

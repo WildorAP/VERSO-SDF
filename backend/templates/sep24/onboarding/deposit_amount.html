@@ -3,18 +3,34 @@
 {% block title %}Depósito · Anchor VERSO{% endblock %}
 
 {% block content %}
-    <h1>Depósito PEN → USDC</h1>
+    <h1>Depósito {{ pair_label }}</h1>
     <p class="lede">
-        Ingresa cuántos soles transferirás por CCI/CCE. Enviaremos USDC a la wallet
-        <strong>{{ wallet_short }}</strong> de esta sesión.
+        Ingresa cuánto transferirás en {{ fiat_currency }}.
+        Te daremos el CCI/CCE de nuestra cuenta en {{ fiat_currency }} (banco peruano).
+        Enviaremos USDC a la wallet <strong>{{ wallet_short }}</strong> de esta sesión.
     </p>
+
+    <div class="fiat-switch" role="tablist" aria-label="Moneda del depósito">
+        <a
+            class="fiat-switch__option{% if fiat_currency == 'PEN' %} is-active{% endif %}"
+            href="{{ pen_switch_url }}"
+        >
+            Soles (PEN)
+        </a>
+        <a
+            class="fiat-switch__option{% if fiat_currency == 'USD' %} is-active{% endif %}"
+            href="{{ usd_switch_url }}"
+        >
+            Dólares (USD)
+        </a>
+    </div>
 
     {% if rate_unavailable %}
     <div class="error">No pudimos obtener el tipo de cambio. Intenta de nuevo en unos segundos.</div>
     {% else %}
     <div class="rate-banner" role="status">
         <span class="rate-banner__label">Tipo de cambio vigente</span>
-        <strong class="rate-banner__value">S/ {{ rate_venta_display }} por 1 USDC</strong>
+        <strong class="rate-banner__value">{{ fiat_symbol }} {{ rate_venta_display }} por 1 USDC</strong>
     </div>
     {% endif %}
 
@@ -29,22 +45,22 @@
         {% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}
 
         <div class="field">
-            <label for="id_amount_pen">{{ form.amount_pen.label }} *</label>
+            <label for="id_amount_fiat">{{ form.amount_fiat.label }} *</label>
             <input
                 type="text"
-                name="amount_pen"
-                id="id_amount_pen"
+                name="amount_fiat"
+                id="id_amount_fiat"
                 inputmode="decimal"
                 placeholder="0.00"
                 autocomplete="off"
-                value="{{ form.amount_pen.value|default_if_none:'' }}"
+                value="{{ form.amount_fiat.value|default_if_none:'' }}"
                 required
             >
-            {% if form.amount_pen.help_text %}
-            <p class="field-hint">{{ form.amount_pen.help_text }}</p>
+            {% if form.amount_fiat.help_text %}
+            <p class="field-hint">{{ form.amount_fiat.help_text }}</p>
             {% endif %}
-            {% if form.amount_pen.errors %}
-                {% for error in form.amount_pen.errors %}
+            {% if form.amount_fiat.errors %}
+                {% for error in form.amount_fiat.errors %}
                 <p class="field-error">{{ error }}</p>
                 {% endfor %}
             {% endif %}
@@ -53,7 +69,7 @@
         <div class="quote-panel" aria-live="polite">
             <div class="quote-panel__row">
                 <span class="quote-panel__label">Enviarás</span>
-                <strong class="quote-panel__value" id="quote-send-pen">S/ —</strong>
+                <strong class="quote-panel__value" id="quote-send-fiat">{{ fiat_symbol }} —</strong>
             </div>
             <div class="quote-panel__row quote-panel__row--highlight">
                 <span class="quote-panel__label">Recibirás</span>
@@ -71,7 +87,9 @@
 <script>
     window.VERSO_DEPOSIT_QUOTE = {
         rateVenta: {{ rate_venta|default:"0" }},
-        minPen: 1
+        minFiat: {{ min_fiat_amount|default:"1" }},
+        fiatSymbol: "{{ fiat_symbol|escapejs }}",
+        fiatCurrency: "{{ fiat_currency|escapejs }}"
     };
 </script>
 <script defer src="{% static 'sep24/js/deposit_quote.js' %}"></script>

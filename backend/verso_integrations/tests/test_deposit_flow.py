@@ -2,12 +2,44 @@ from decimal import Decimal
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from stellar_sdk import Keypair
 
-from verso_integrations.deposit import compute_amount_usdc
+from verso_integrations.deposit import compute_amount_usdc, get_cci_deposit_instructions
 from verso_integrations.models import FiatDeposit
+
+
+class CciDepositInstructionsTests(TestCase):
+    @override_settings(
+        VERSO_CCI_BANK_NAME="BCP",
+        VERSO_CCI_ACCOUNT_NUMBER="002-PEN-CCI",
+        VERSO_CCI_ACCOUNT_HOLDER="VERSO PEN",
+        VERSO_USD_CCI_BANK_NAME="Interbank",
+        VERSO_USD_CCI_ACCOUNT_NUMBER="003-USD-CCI",
+        VERSO_USD_CCI_ACCOUNT_HOLDER="VERSO USD",
+    )
+    def test_pen_and_usd_use_separate_cci_accounts(self):
+        pen = get_cci_deposit_instructions(
+            100.0,
+            "abc",
+            tipo_cambio=3.75,
+            amount_usdc=26.6666667,
+            fiat_currency="PEN",
+        )
+        usd = get_cci_deposit_instructions(
+            100.0,
+            "abc",
+            tipo_cambio=1.01,
+            amount_usdc=99.009901,
+            fiat_currency="USD",
+        )
+        self.assertEqual(pen["account_number"], "002-PEN-CCI")
+        self.assertEqual(usd["account_number"], "003-USD-CCI")
+        self.assertEqual(pen["fiat_currency"], "PEN")
+        self.assertEqual(usd["fiat_currency"], "USD")
+        self.assertNotIn("swift_code", pen)
+        self.assertNotIn("routing_number", usd)
 
 
 class FiatDepositModelTests(TestCase):
