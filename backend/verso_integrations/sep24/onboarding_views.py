@@ -173,6 +173,10 @@ def _render_step(
             context["kyc_embed_url"] = kyc.embed_url
             context["kyc_callback_url"] = kyc.callback_url
             context["kyc_fallback_url"] = kyc.fallback_url
+            poll_query = urlencode({"transaction_id": str(transaction.id)})
+            context["kyc_poll_url"] = request.build_absolute_uri(
+                f"{reverse('sep24_kyc_poll')}?{poll_query}"
+            )
             context["didit_origins_json"] = didit_embed_origins_json()
         return render(request, "sep24/onboarding/didit.html", context)
     if step == "pending":

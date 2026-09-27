@@ -11,7 +11,7 @@ from decimal import Decimal
 from urllib.parse import urlencode
 
 from django.conf import settings
-from django.http import HttpRequest, HttpResponse, HttpResponseBadRequest
+from django.http import HttpRequest, HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from polaris.models import Transaction
@@ -23,6 +23,7 @@ from verso_integrations.sep24.kyc_gate import (
     clear_wants_register,
     get_pending_verso_user,
     is_email_verified,
+    is_session_kyc_approved,
     mark_session_kyc_approved,
     mark_wants_register,
     sync_kyc_from_core,
@@ -153,6 +154,45 @@ def kyc_start(request: HttpRequest) -> HttpResponse:
     if result.embed_url:
         return redirect(result.embed_url)
     return HttpResponseBadRequest("No se pudo iniciar la verificación DIDIT.")
+
+
+def kyc_poll(request: HttpRequest) -> JsonResponse:
+    """Poll VERSO Core for DIDIT completion (iframe postMessage is unreliable on mobile QR)."""
+    try:
+        transaction = _load_deposit_transaction(request, request.GET.get("transaction_id"))
+    except ValueError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+
+    if is_session_kyc_approved(request, transaction.id):
+        return JsonResponse(
+            {
+                "status": "approved",
+                "redirect": _webapp_url(request, transaction),
+            }
+        )
+
+    _user_id, email = get_pending_verso_user(request, transaction.id)
+    if not email:
+        return JsonResponse(
+            {"error": "Sesión de onboarding incompleta."},
+            status=400,
+        )
+
+    try:
+        status = user_status(email=email)
+    except CoreClientError as exc:
+        return JsonResponse({"error": str(exc)}, status=502)
+
+    if status.kyc_completed:
+        mark_session_kyc_approved(request, transaction.id)
+        return JsonResponse(
+            {
+                "status": "approved",
+                "redirect": _webapp_url(request, transaction),
+            }
+        )
+
+    return JsonResponse({"status": "pending"})
 
 
 def kyc_callback(request: HttpRequest) -> HttpResponse:

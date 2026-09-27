@@ -30,6 +30,11 @@
     </p>
 
     <p class="foot-link didit-fallback">
+        ¿Ya terminaste en el celular?
+        <a id="didit-continue" href="{{ kyc_callback_url }}">Continuar al depósito PEN</a>
+    </p>
+
+    <p class="foot-link didit-fallback">
         ¿Problemas con la cámara?
         <a href="{{ kyc_fallback_url }}" target="_blank" rel="noopener noreferrer">
             Abrir en pantalla completa
@@ -39,12 +44,14 @@
 {% endblock %}
 
 {% block extra_scripts %}
-{% if kyc_embed_url and kyc_callback_url %}
+{% if kyc_embed_url and kyc_callback_url and kyc_poll_url %}
 <script>
 (function () {
     var callbackUrl = "{{ kyc_callback_url|escapejs }}";
+    var pollUrl = "{{ kyc_poll_url|escapejs }}";
     var allowedOrigins = {{ didit_origins_json|safe }};
     var statusEl = document.getElementById("didit-status");
+    var polling = false;
 
     function showProcessing() {
         if (statusEl) {
@@ -52,8 +59,39 @@
         }
     }
 
+    function goToRedirect(url) {
+        showProcessing();
+        window.location.href = url || callbackUrl;
+    }
+
     function isAllowedOrigin(origin) {
         return allowedOrigins.indexOf(origin) !== -1;
+    }
+
+    function isApprovedStatus(status) {
+        if (!status) {
+            return false;
+        }
+        var normalized = String(status).toLowerCase();
+        return normalized === "approved" || normalized === "completed";
+    }
+
+    function pollKycStatus() {
+        if (polling) {
+            return;
+        }
+        polling = true;
+        fetch(pollUrl, { credentials: "same-origin", headers: { Accept: "application/json" } })
+            .then(function (response) { return response.json(); })
+            .then(function (payload) {
+                polling = false;
+                if (payload.status === "approved" && payload.redirect) {
+                    goToRedirect(payload.redirect);
+                }
+            })
+            .catch(function () {
+                polling = false;
+            });
     }
 
     window.addEventListener("message", function (event) {
@@ -66,16 +104,17 @@
         var data = payload.data || {};
 
         if (type === "didit:completed") {
-            showProcessing();
-            window.location.href = callbackUrl;
+            goToRedirect(callbackUrl);
             return;
         }
 
-        if (type === "didit:status_updated" && data.status === "Approved") {
-            showProcessing();
-            window.location.href = callbackUrl;
+        if (type === "didit:status_updated" && isApprovedStatus(data.status)) {
+            pollKycStatus();
         }
     });
+
+    setInterval(pollKycStatus, 4000);
+    pollKycStatus();
 })();
 </script>
 {% endif %}

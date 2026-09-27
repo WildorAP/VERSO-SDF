@@ -92,6 +92,36 @@ class KycViewTests(TestCase):
         self.assertTrue(self.client.session.get(session_key))
 
     @patch("verso_integrations.sep24.kyc_views.user_status")
+    def test_kyc_poll_returns_redirect_when_core_approves(self, mock_status):
+        mock_status.return_value = UserStatusResult(
+            user_id=42,
+            email="user@example.com",
+            kyc_completed=True,
+        )
+        response = self.client.get(
+            f"/sep24/kyc/poll/?transaction_id={self.transaction.id}"
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["status"], "approved")
+        self.assertIn("/sep24/transactions/deposit/webapp", payload["redirect"])
+
+    def test_kyc_poll_pending_when_kyc_incomplete(self):
+        with patch(
+            "verso_integrations.sep24.kyc_views.user_status",
+            return_value=UserStatusResult(
+                user_id=42,
+                email="user@example.com",
+                kyc_completed=False,
+            ),
+        ):
+            response = self.client.get(
+                f"/sep24/kyc/poll/?transaction_id={self.transaction.id}"
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["status"], "pending")
+
+    @patch("verso_integrations.sep24.kyc_views.user_status")
     def test_kyc_callback_marks_kyc_when_core_confirms(self, mock_status):
         mock_status.return_value = UserStatusResult(
             user_id=42,
