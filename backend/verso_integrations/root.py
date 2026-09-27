@@ -18,6 +18,21 @@ def _network() -> str:
     return "testnet" if passphrase == TESTNET_PASSPHRASE else "mainnet"
 
 
+def stellar_expert_base_url() -> str:
+    return (
+        "https://stellar.expert/explorer/testnet"
+        if _network() == "testnet"
+        else "https://stellar.expert/explorer/public"
+    )
+
+
+def stellar_expert_tx_url(stellar_transaction_id: str) -> str:
+    tx_id = (stellar_transaction_id or "").strip()
+    if not tx_id:
+        return ""
+    return f"{stellar_expert_base_url()}/tx/{tx_id}"
+
+
 def _anchor_account() -> str | None:
     signing_seed = os.environ.get("SIGNING_SEED", "").strip()
     if not signing_seed:
@@ -37,11 +52,7 @@ def build_root_payload() -> dict:
     host = os.environ.get("HOST_URL", "http://localhost:8000").rstrip("/")
     network = _network()
     anchor_account = _anchor_account()
-    explorer = (
-        "https://stellar.expert/explorer/testnet"
-        if network == "testnet"
-        else "https://stellar.expert/explorer/public"
-    )
+    explorer = stellar_expert_base_url()
     account_explorer = (
         f"{explorer}/account/{anchor_account}" if anchor_account else explorer
     )

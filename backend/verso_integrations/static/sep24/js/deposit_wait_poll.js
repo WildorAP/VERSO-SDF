@@ -10,6 +10,11 @@
   var statusEl = document.getElementById("deposit-wait-status");
   var headingEl = document.getElementById("deposit-wait-heading");
   var ledeEl = document.getElementById("deposit-wait-lede");
+  var completedDateRow = document.getElementById("deposit-completed-date-row");
+  var completedDateEl = document.getElementById("deposit-completed-date");
+  var txidBlock = document.getElementById("deposit-wait-txid-block");
+  var txidEl = document.getElementById("stellar-txid");
+  var txidLink = document.getElementById("stellar-txid-link");
   var pollIntervalMs = 4000;
   var timerId = null;
 
@@ -38,6 +43,24 @@
     }
   }
 
+  function reveal(el) {
+    if (el) {
+      el.classList.remove("is-hidden");
+    }
+  }
+
+  function showTxid(stellarTransactionId, stellarTxUrl) {
+    if (!stellarTransactionId || !txidBlock || !txidEl) {
+      return;
+    }
+    txidEl.textContent = stellarTransactionId;
+    reveal(txidBlock);
+    if (txidLink && stellarTxUrl) {
+      txidLink.href = stellarTxUrl;
+      reveal(txidLink);
+    }
+  }
+
   function showCompleted(payload) {
     if (headingEl) {
       headingEl.textContent = "Operación finalizada";
@@ -51,6 +74,11 @@
       statusEl.classList.add("didit-status--success");
       statusEl.classList.remove("didit-status--error");
     }
+    if (completedDateEl && payload.completed_at_display) {
+      completedDateEl.textContent = payload.completed_at_display;
+    }
+    reveal(completedDateRow);
+    showTxid(payload.stellar_transaction_id, payload.stellar_tx_url);
     notifyWallet(payload.transaction);
     stopPolling();
   }

@@ -38,6 +38,53 @@
             <strong>{{ bank_instructions.reference }}</strong>
         </div>
         {% endif %}
+        {% if order_at_display %}
+        <div class="transfer-summary__row">
+            <span>Pedido registrado</span>
+            <strong id="deposit-order-date">{{ order_at_display }}</strong>
+        </div>
+        {% endif %}
+        <div
+            class="transfer-summary__row{% if not completed_at_display %} is-hidden{% endif %}"
+            id="deposit-completed-date-row"
+        >
+            <span>Operación finalizada</span>
+            <strong id="deposit-completed-date">{{ completed_at_display }}</strong>
+        </div>
+    </div>
+
+    <div
+        id="deposit-wait-txid-block"
+        class="deposit-wait-txid{% if not stellar_transaction_id %} is-hidden{% endif %}"
+    >
+        <div class="copy-field copy-field--emphasis">
+            <div class="copy-field__label">TXID (Stellar)</div>
+            <div class="copy-field__value copy-field__value--mono" id="stellar-txid">{{ stellar_transaction_id }}</div>
+            <div class="deposit-wait-txid__actions">
+                <button type="button" class="btn-copy" data-copy-target="stellar-txid">Copiar TXID</button>
+                {% if stellar_tx_url %}
+                <a
+                    id="stellar-txid-link"
+                    class="deposit-wait-txid__link"
+                    href="{{ stellar_tx_url }}"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                >
+                    Ver en blockchain
+                </a>
+                {% else %}
+                <a
+                    id="stellar-txid-link"
+                    class="deposit-wait-txid__link is-hidden"
+                    href="#"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                >
+                    Ver en blockchain
+                </a>
+                {% endif %}
+            </div>
+        </div>
     </div>
 
     <p
@@ -47,14 +94,6 @@
     >
         {{ status_message }}
     </p>
-
-    {% if stellar_transaction_id %}
-    <p class="deposit-wait-stellar">
-        <a href="https://stellar.expert/explorer/public/tx/{{ stellar_transaction_id }}" target="_blank" rel="noopener noreferrer">
-            Ver transacción en Stellar Expert
-        </a>
-    </p>
-    {% endif %}
 {% endblock %}
 
 {% block extra_scripts %}
@@ -68,4 +107,5 @@
 ></div>
 <script src="{% static 'sep24/js/deposit_wait_poll.js' %}"></script>
 {% endif %}
+<script src="{% static 'sep24/js/deposit_wait.js' %}"></script>
 {% endblock %}

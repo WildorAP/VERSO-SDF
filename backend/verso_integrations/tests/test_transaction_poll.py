@@ -45,7 +45,8 @@ class TransactionPollViewTests(TestCase):
 
     def test_transaction_poll_marks_completed_as_terminal(self):
         self.transaction.status = Transaction.STATUS.completed
-        self.transaction.save(update_fields=["status"])
+        self.transaction.stellar_transaction_id = "deadbeefstellarhash"
+        self.transaction.save(update_fields=["status", "stellar_transaction_id"])
 
         response = self.client.get(
             reverse("sep24_transaction_poll"),
@@ -54,6 +55,8 @@ class TransactionPollViewTests(TestCase):
         payload = response.json()
         self.assertEqual(payload["status"], "completed")
         self.assertTrue(payload["terminal"])
+        self.assertEqual(payload["stellar_transaction_id"], "deadbeefstellarhash")
+        self.assertIn("/tx/deadbeefstellarhash", payload["stellar_tx_url"])
 
     def test_transaction_poll_requires_id(self):
         response = self.client.get(reverse("sep24_transaction_poll"))
@@ -156,7 +159,13 @@ class MoreInfoAutoRefreshTests(TestCase):
         meta.transfer_declared_at = timezone.now()
         meta.save(update_fields=["transfer_declared_at"])
         self.transaction.status = Transaction.STATUS.completed
-        self.transaction.save(update_fields=["status"])
+        self.transaction.stellar_transaction_id = "abc123stellarhash"
+        from django.utils import timezone as tz
+
+        self.transaction.completed_at = tz.now()
+        self.transaction.save(
+            update_fields=["status", "stellar_transaction_id", "completed_at"]
+        )
 
         content = self.integration.content_for_template(
             self.request,
@@ -165,6 +174,10 @@ class MoreInfoAutoRefreshTests(TestCase):
         )
         html = render_to_string(content["template_name"], content)
         self.assertIn("Operación finalizada", html)
+        self.assertIn("Pedido registrado", html)
+        self.assertIn("Copiar TXID", html)
+        self.assertIn("Ver en blockchain", html)
+        self.assertIn("abc123stellarhash", html)
         self.assertNotIn("deposit_wait_poll.js", html)
         self.assertNotIn("deposit-wait-poll-root", html)
 

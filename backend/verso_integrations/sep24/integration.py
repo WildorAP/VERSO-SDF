@@ -26,6 +26,7 @@ from verso_integrations.polaris_setup import (
     usdc_asset_identification,
 )
 from verso_integrations.rates import RatesError, get_pen_usdc_rate
+from verso_integrations.root import stellar_expert_tx_url
 from verso_integrations.sep24.transaction_views import TERMINAL_TRANSACTION_STATUSES
 from verso_integrations.sep24.forms import (
     BankTransferReceiptForm,
@@ -78,6 +79,12 @@ def _onboarding_switch_url(request: Request, transaction: Transaction, mode: str
     return request.build_absolute_uri(f"{path}?{query}")
 
 
+def _format_local_datetime(value) -> str:
+    if not value:
+        return ""
+    return timezone.localtime(value).strftime("%d/%m/%Y · %H:%M")
+
+
 def _deposit_wait_status_message(
     transaction: Transaction, meta: Sep24DepositMeta
 ) -> str:
@@ -106,6 +113,7 @@ def _deposit_wait_status_message(
 def _deposit_waiting_content(request: Request, transaction: Transaction, meta: Sep24DepositMeta, base: dict) -> dict:
     poll_query = urlencode({"id": str(transaction.id)})
     terminal = transaction.status in TERMINAL_TRANSACTION_STATUSES
+    stellar_tx_id = transaction.stellar_transaction_id or ""
     base.update(
         {
             "bank_instructions": meta.bank_instructions,
@@ -117,7 +125,10 @@ def _deposit_waiting_content(request: Request, transaction: Transaction, meta: S
             "transaction_status": str(transaction.status),
             "status_message": _deposit_wait_status_message(transaction, meta),
             "poll_enabled": not terminal,
-            "stellar_transaction_id": transaction.stellar_transaction_id or "",
+            "order_at_display": _format_local_datetime(meta.created_at),
+            "completed_at_display": _format_local_datetime(transaction.completed_at),
+            "stellar_transaction_id": stellar_tx_id,
+            "stellar_tx_url": stellar_expert_tx_url(stellar_tx_id),
             "poll_url": request.build_absolute_uri(
                 f"{reverse('sep24_transaction_poll')}?{poll_query}"
             ),

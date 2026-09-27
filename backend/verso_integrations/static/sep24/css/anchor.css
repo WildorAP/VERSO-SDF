@@ -322,6 +322,27 @@ h1 {
   font-size: 0.9rem;
 }
 
+.deposit-wait-txid {
+  margin-top: 1.25rem;
+}
+
+.deposit-wait-txid__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  align-items: center;
+  margin-top: 0.45rem;
+}
+
+.deposit-wait-txid__link {
+  font-size: 0.78rem;
+  color: var(--cyan);
+}
+
+.is-hidden {
+  display: none !important;
+}
+
 .didit-fallback {
   text-align: center;
 }

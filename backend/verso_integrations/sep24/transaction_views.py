@@ -6,9 +6,12 @@ from __future__ import annotations
 
 from django.http import HttpRequest, JsonResponse
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from polaris.models import Transaction
 from polaris.shared.serializers import TransactionSerializer
 from rest_framework.request import Request
+
+from verso_integrations.root import stellar_expert_tx_url
 
 TERMINAL_TRANSACTION_STATUSES = frozenset(
     {
@@ -38,6 +41,8 @@ def transaction_poll(request: HttpRequest) -> JsonResponse:
         context={"request": drf_request, "sep6": False},
     )
 
+    stellar_tx_id = transaction.stellar_transaction_id or ""
+
     return JsonResponse(
         {
             "status": str(transaction.status),
@@ -45,7 +50,13 @@ def transaction_poll(request: HttpRequest) -> JsonResponse:
             "completed_at": (
                 transaction.completed_at.isoformat() if transaction.completed_at else None
             ),
-            "stellar_transaction_id": transaction.stellar_transaction_id or "",
+            "completed_at_display": (
+                timezone.localtime(transaction.completed_at).strftime("%d/%m/%Y · %H:%M")
+                if transaction.completed_at
+                else ""
+            ),
+            "stellar_transaction_id": stellar_tx_id,
+            "stellar_tx_url": stellar_expert_tx_url(stellar_tx_id),
             "terminal": transaction.status in TERMINAL_TRANSACTION_STATUSES,
             "transaction": serializer.data,
         }
