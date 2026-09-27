@@ -112,6 +112,7 @@ class VersoWithdrawIntegrationTests(TestCase):
                 "bank_name": "BCP",
                 "account_number": "0021001234567890123456",
                 "account_holder": "Juan Pérez",
+                "origen_fondos": "TRADING",
             }
         )
         self.assertTrue(payout_form.is_valid())
@@ -119,10 +120,22 @@ class VersoWithdrawIntegrationTests(TestCase):
 
         meta = Sep24WithdrawMeta.objects.get(transaction=self.transaction)
         self.assertEqual(meta.payout_bank_details["bank_name"], "BCP")
+        self.assertEqual(meta.payout_bank_details["origen_fondos"], "TRADING")
         self.assertIsNotNone(meta.payout_confirmed_at)
         self.assertIsNone(
             self.integration.form_for_transaction(self.request, self.transaction)
         )
+
+    def test_payout_form_requires_origen_fondos_otro_when_otro(self):
+        form = PayoutBankForm(
+            {
+                "bank_name": "BCP",
+                "account_number": "0021001234567890123456",
+                "account_holder": "Juan Pérez",
+                "origen_fondos": "OTRO",
+            }
+        )
+        self.assertFalse(form.is_valid())
 
 
 @override_settings(VERSO_MOCK_KYC="approved")

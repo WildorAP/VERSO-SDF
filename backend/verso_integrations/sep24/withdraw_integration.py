@@ -283,6 +283,8 @@ class VersoWithdrawIntegration(WithdrawalIntegration):
             account_number=form.cleaned_data["account_number"],
             account_holder=form.cleaned_data["account_holder"],
             fiat_currency=meta.fiat_currency,
+            origen_fondos=form.cleaned_data["origen_fondos"],
+            origen_fondos_otro=form.cleaned_data.get("origen_fondos_otro", ""),
         )
         meta.payout_confirmed_at = timezone.now()
         meta.save(

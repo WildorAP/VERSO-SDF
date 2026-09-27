@@ -6,6 +6,7 @@ from django import forms
 from django.core.exceptions import ValidationError
 
 from verso_integrations.sep24.fiat import FIAT_PEN, FIAT_USD, fiat_config, normalize_fiat_currency
+from verso_integrations.sep24.onboarding_forms import ORIGEN_FONDOS_CHOICES
 
 MAX_RECEIPT_BYTES = 10 * 1024 * 1024
 
@@ -157,6 +158,32 @@ class PayoutBankForm(forms.Form):
         max_length=120,
         widget=forms.TextInput(attrs={"autocomplete": "name"}),
     )
+    origen_fondos = forms.ChoiceField(
+        label="Origen de fondos",
+        choices=ORIGEN_FONDOS_CHOICES,
+        help_text="¿De dónde provienen los USDC que retiras?",
+    )
+    origen_fondos_otro = forms.CharField(
+        label="Especifica el origen",
+        max_length=200,
+        required=False,
+        widget=forms.TextInput(
+            attrs={
+                "id": "id_origen_fondos_otro",
+                "placeholder": "Describe brevemente",
+            }
+        ),
+    )
+
+    def clean(self):
+        cleaned = super().clean()
+        if self.errors:
+            return cleaned
+        if cleaned.get("origen_fondos") == "OTRO" and not cleaned.get(
+            "origen_fondos_otro", ""
+        ).strip():
+            raise ValidationError("Especifica el origen de fondos.")
+        return cleaned
 
     def clean_account_number(self):
         value = (self.cleaned_data.get("account_number") or "").strip()

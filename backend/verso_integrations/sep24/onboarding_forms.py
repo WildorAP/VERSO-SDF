@@ -11,6 +11,14 @@ from verso_integrations.core_client import (
 )
 from verso_integrations.sep24.kyc_gate import ensure_stellar_wallet_linked, get_pending_verso_user
 
+ORIGEN_FONDOS_CHOICES = [
+    ("SUELDO", "Sueldo / salario"),
+    ("AHORROS", "Ahorros"),
+    ("INVERSION", "Inversión"),
+    ("TRADING", "Trading / operaciones"),
+    ("OTRO", "Otro"),
+]
+
 
 class VersoLoginForm(forms.Form):
     email = forms.EmailField(label="Correo electrónico")
@@ -106,13 +114,7 @@ class VersoProfileForm(forms.Form):
     ocupacion = forms.CharField(label="Profesión o actividad comercial", max_length=100)
     origen_fondos = forms.ChoiceField(
         label="Origen de fondos",
-        choices=[
-            ("SUELDO", "Sueldo / salario"),
-            ("AHORROS", "Ahorros"),
-            ("INVERSION", "Inversión"),
-            ("TRADING", "Trading / operaciones"),
-            ("OTRO", "Otro"),
-        ],
+        choices=ORIGEN_FONDOS_CHOICES,
     )
     origen_fondos_otro = forms.CharField(
         label="Especifica el origen",

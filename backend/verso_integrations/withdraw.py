@@ -22,13 +22,19 @@ def build_payout_bank_details(
     account_number: str,
     account_holder: str,
     fiat_currency: str,
+    origen_fondos: str,
+    origen_fondos_otro: str = "",
 ) -> dict:
     """Normalize payout CCI details stored on Sep24WithdrawMeta."""
     currency = normalize_fiat_currency(fiat_currency)
-    return {
+    details = {
         "fiat_currency": currency,
         "bank_name": bank_name.strip(),
         "account_number": account_number.strip(),
         "account_holder": account_holder.strip(),
+        "origen_fondos": origen_fondos.strip(),
         "transfer_kind": "cci",
     }
+    if origen_fondos == "OTRO":
+        details["origen_fondos_otro"] = origen_fondos_otro.strip()
+    return details

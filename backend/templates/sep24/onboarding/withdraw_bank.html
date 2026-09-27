@@ -1,11 +1,12 @@
 {% extends "sep24/onboarding/_base.html" %}
+{% load static %}
 {% block title %}Cuenta de destino · Anchor VERSO{% endblock %}
 
 {% block content %}
     <h1>Cuenta para recibir {{ fiat_currency }}</h1>
     <p class="lede">
-        Indica el CCI/CCE de tu cuenta en un banco peruano donde recibirás
-        <strong>{{ fiat_symbol }} {{ amount_fiat }}</strong> por tus
+        Indica el CCI/CCE de tu cuenta en un banco peruano y el origen de los fondos.
+        Recibirás <strong>{{ fiat_symbol }} {{ amount_fiat }}</strong> por tus
         <strong>{{ amount_usdc }} USDC</strong>.
     </p>
 
@@ -30,40 +31,74 @@
         {% endfor %}
     {% endif %}
 
-    <form method="post" action="{{ post_url }}" class="transfer-form">
+    <form method="post" action="{{ post_url }}" class="transfer-form" id="withdraw-bank-form">
         {% csrf_token %}
 
-        <div class="field">
-            <label for="id_bank_name">{{ form.bank_name.label }} *</label>
-            {{ form.bank_name }}
-            {% if form.bank_name.errors %}
-                {% for error in form.bank_name.errors %}
-                <p class="field-error">{{ error }}</p>
-                {% endfor %}
-            {% endif %}
+        <div class="wizard-card">
+            <h2 class="wizard-card__title">Datos bancarios</h2>
+            <p class="wizard-card__hint">Cuenta peruana donde recibirás el {{ fiat_currency }}.</p>
+
+            <div class="field">
+                <label for="id_bank_name">{{ form.bank_name.label }} *</label>
+                {{ form.bank_name }}
+                {% if form.bank_name.errors %}
+                    {% for error in form.bank_name.errors %}
+                    <p class="field-error">{{ error }}</p>
+                    {% endfor %}
+                {% endif %}
+            </div>
+
+            <div class="field">
+                <label for="id_account_holder">{{ form.account_holder.label }} *</label>
+                {{ form.account_holder }}
+                {% if form.account_holder.errors %}
+                    {% for error in form.account_holder.errors %}
+                    <p class="field-error">{{ error }}</p>
+                    {% endfor %}
+                {% endif %}
+            </div>
+
+            <div class="field">
+                <label for="id_account_number">{{ form.account_number.label }} *</label>
+                {{ form.account_number }}
+                {% if form.account_number.help_text %}
+                <p class="field-hint">{{ form.account_number.help_text }}</p>
+                {% endif %}
+                {% if form.account_number.errors %}
+                    {% for error in form.account_number.errors %}
+                    <p class="field-error">{{ error }}</p>
+                    {% endfor %}
+                {% endif %}
+            </div>
         </div>
 
-        <div class="field">
-            <label for="id_account_holder">{{ form.account_holder.label }} *</label>
-            {{ form.account_holder }}
-            {% if form.account_holder.errors %}
-                {% for error in form.account_holder.errors %}
-                <p class="field-error">{{ error }}</p>
-                {% endfor %}
-            {% endif %}
-        </div>
+        <div class="wizard-card">
+            <h2 class="wizard-card__title">Origen de fondos</h2>
+            <p class="wizard-card__hint">{{ form.origen_fondos.help_text }}</p>
 
-        <div class="field">
-            <label for="id_account_number">{{ form.account_number.label }} *</label>
-            {{ form.account_number }}
-            {% if form.account_number.help_text %}
-            <p class="field-hint">{{ form.account_number.help_text }}</p>
-            {% endif %}
-            {% if form.account_number.errors %}
-                {% for error in form.account_number.errors %}
-                <p class="field-error">{{ error }}</p>
-                {% endfor %}
-            {% endif %}
+            <div class="field">
+                <label for="id_origen_fondos">{{ form.origen_fondos.label }} *</label>
+                <select id="id_origen_fondos" name="origen_fondos" required>
+                    {% for value, label in form.fields.origen_fondos.choices %}
+                    <option value="{{ value }}"{% if form.origen_fondos.value == value %} selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+                {% if form.origen_fondos.errors %}
+                    {% for error in form.origen_fondos.errors %}
+                    <p class="field-error">{{ error }}</p>
+                    {% endfor %}
+                {% endif %}
+            </div>
+
+            <div class="field field--conditional" id="origen-otro-wrap" hidden>
+                <label for="id_origen_fondos_otro">{{ form.origen_fondos_otro.label }} *</label>
+                {{ form.origen_fondos_otro }}
+                {% if form.origen_fondos_otro.errors %}
+                    {% for error in form.origen_fondos_otro.errors %}
+                    <p class="field-error">{{ error }}</p>
+                    {% endfor %}
+                {% endif %}
+            </div>
         </div>
 
         <button type="submit" class="btn">Confirmar cuenta de destino</button>
@@ -71,4 +106,8 @@
             Solo transferencias a cuentas peruanas vía CCI/CCE. Verifica que los datos sean correctos.
         </p>
     </form>
+{% endblock %}
+
+{% block extra_scripts %}
+<script defer src="{% static 'sep24/js/withdraw_bank.js' %}"></script>
 {% endblock %}
