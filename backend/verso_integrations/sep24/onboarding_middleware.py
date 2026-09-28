@@ -11,14 +11,12 @@ from polaris.models import Transaction
 from verso_integrations.models import Sep24DepositMeta, Sep24WithdrawMeta
 from verso_integrations.sep24.kyc_gate import onboarding_step, sync_fiat_currency_from_request
 from verso_integrations.sep24.onboarding_flow import operate_step_for_transaction
-from verso_integrations.sep24.withdraw_wallet import ensure_withdraw_receiving_details
 from verso_integrations.sep24.wallet_callbacks import (
+    POSTMESSAGE_CALLBACK,
     append_wallet_callbacks_to_url,
     persist_sep24_wallet_callbacks,
     sep24_wallet_callback_query,
 )
-
-MORE_INFO_PATH_PREFIX = "/sep24/transaction/more_info"
 
 WEBAPP_PATHS: dict[str, tuple] = {
     "/sep24/transactions/deposit/webapp": (
@@ -37,11 +35,6 @@ class Sep24OnboardingMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
-        if request.method == "GET" and request.path.startswith(MORE_INFO_PATH_PREFIX):
-            redirect_response = self._maybe_redirect_more_info_with_callbacks(request)
-            if redirect_response is not None:
-                return redirect_response
-
         for path_prefix, (kind, meta_model) in WEBAPP_PATHS.items():
             if not request.path.startswith(path_prefix):
                 continue
@@ -71,8 +64,16 @@ class Sep24OnboardingMiddleware:
                     params = {
                         "id": str(transaction.id),
                         "initialLoad": "true",
-                        **sep24_wallet_callback_query(request, transaction_id),
+                        **sep24_wallet_callback_query(
+                            request,
+                            transaction_id,
+                            transaction=transaction,
+                            meta=meta,
+                        ),
                     }
+                    if not params.get("callback"):
+                        params["callback"] = POSTMESSAGE_CALLBACK
+                        params.setdefault("on_change_callback", POSTMESSAGE_CALLBACK)
                     return redirect(f"{reverse('more_info')}?{urlencode(params)}")
 
             if meta_model.objects.filter(transaction=transaction).exists():
@@ -91,74 +92,3 @@ class Sep24OnboardingMiddleware:
             break
 
         return self.get_response(request)
-
-    def _maybe_redirect_more_info_with_callbacks(self, request):
-        """
-        Re-append wallet callback params on more_info when Polaris dropped them.
-
-        Without ``callback=postMessage`` + ``initialLoad=true``, callback.js never
-        postMessages the transaction to Demo Wallet and the user never signs USDC.
-        """
-        transaction_id = request.GET.get("id")
-        if not transaction_id:
-            return None
-
-        try:
-            transaction = Transaction.objects.get(
-                id=transaction_id,
-                protocol=Transaction.PROTOCOL.sep24,
-            )
-        except Transaction.DoesNotExist:
-            return None
-
-        persist_sep24_wallet_callbacks(request, transaction_id)
-
-        if transaction.kind == Transaction.KIND.withdrawal:
-            ensure_withdraw_receiving_details(transaction)
-            transaction.refresh_from_db()
-
-        callback_params = sep24_wallet_callback_query(
-            request,
-            transaction_id,
-            transaction=transaction,
-        )
-        if not callback_params:
-            return None
-
-        current_callback = (request.GET.get("callback") or "").lower()
-        if current_callback == "success":
-            return None
-
-        params = request.GET.copy()
-        changed = False
-
-        session_callback = callback_params.get("callback")
-        if session_callback and request.GET.get("callback") != session_callback:
-            params["callback"] = session_callback
-            changed = True
-
-        session_on_change = callback_params.get("on_change_callback")
-        if session_on_change and request.GET.get("on_change_callback") != session_on_change:
-            params["on_change_callback"] = session_on_change
-            changed = True
-
-        if transaction.kind == Transaction.KIND.withdrawal:
-            meta = Sep24WithdrawMeta.objects.filter(transaction=transaction).first()
-            awaiting_wallet = (
-                meta
-                and meta.payout_confirmed_at
-                and transaction.status
-                not in {
-                    Transaction.STATUS.completed,
-                    Transaction.STATUS.error,
-                }
-                and not (transaction.stellar_transaction_id or "").strip()
-            )
-            if awaiting_wallet and not request.GET.get("initialLoad"):
-                params["initialLoad"] = "true"
-                changed = True
-
-        if not changed:
-            return None
-
-        return redirect(f"{reverse('more_info')}?{params.urlencode()}")

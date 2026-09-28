@@ -26,8 +26,10 @@ def _request_with_session(method, path, data=None, session=None):
     request = getattr(factory, method.lower())(path, data or {})
     middleware = SessionMiddleware(_noop)
     middleware.process_request(request)
-    request.session = session or {}
-    request.session.save = lambda *args, **kwargs: None
+    if session is not None:
+        request.session = session
+        if hasattr(request.session, "save"):
+            request.session.save = lambda *args, **kwargs: None
     return request
 
 
@@ -80,42 +82,6 @@ class WithdrawMiddlewareCallbackTests(TestCase):
         self.assertEqual(query["callback"], ["postMessage"])
         self.assertEqual(query["on_change_callback"], ["postMessage"])
 
-    def test_more_info_middleware_restores_callback_from_session(self):
-        session = self.client.session
-        session[f"sep24_wallet_callback:{self.transaction.id}"] = "postMessage"
-        session[f"sep24_wallet_on_change:{self.transaction.id}"] = "postMessage"
-        session.save()
-
-        request = _request_with_session(
-            "GET",
-            f"/sep24/transaction/more_info?id={self.transaction.id}&initialLoad=true",
-            session=self.client.session,
-        )
-        response = Sep24OnboardingMiddleware(_noop)(request)
-
-        self.assertEqual(response.status_code, 302)
-        query = parse_qs(urlparse(response["Location"]).query)
-        self.assertEqual(query["callback"], ["postMessage"])
-        self.assertEqual(query["on_change_callback"], ["postMessage"])
-        self.assertEqual(query["initialLoad"], ["true"])
-
-    def test_more_info_middleware_restores_callback_from_transaction_row(self):
-        self.transaction.on_change_callback = "postMessage"
-        self.transaction.save(update_fields=["on_change_callback"])
-
-        request = _request_with_session(
-            "GET",
-            f"/sep24/transaction/more_info?id={self.transaction.id}",
-            session={},
-        )
-        response = Sep24OnboardingMiddleware(_noop)(request)
-
-        self.assertEqual(response.status_code, 302)
-        query = parse_qs(urlparse(response["Location"]).query)
-        self.assertEqual(query["callback"], ["postMessage"])
-        self.assertEqual(query["on_change_callback"], ["postMessage"])
-        self.assertEqual(query["initialLoad"], ["true"])
-
 
 @override_settings(
     VERSO_MOCK_KYC="approved",
@@ -166,3 +132,17 @@ class WithdrawMoreInfoCallbackTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "polaris/scripts/callback.js")
         self.assertContains(response, "postMessage")
+
+    def test_verso_more_info_injects_postmessage_when_only_initial_load(self):
+        response = self.client.get(
+            reverse("more_info"),
+            {
+                "id": str(self.transaction.id),
+                "initialLoad": "true",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "callback.js")
+        self.assertContains(response, "postMessage")
+        self.transaction.refresh_from_db()
+        self.assertEqual(self.transaction.on_change_callback, "postMessage")
