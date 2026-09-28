@@ -54,6 +54,8 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    # Listed before SecurityMiddleware so responses are processed after COOP is set.
+    "verso_integrations.sep24.coop_middleware.Sep24PopupCOOPMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "corsheaders.middleware.CorsMiddleware",
