@@ -117,7 +117,11 @@ class Sep24OnboardingMiddleware:
             ensure_withdraw_receiving_details(transaction)
             transaction.refresh_from_db()
 
-        callback_params = sep24_wallet_callback_query(request, transaction_id)
+        callback_params = sep24_wallet_callback_query(
+            request,
+            transaction_id,
+            transaction=transaction,
+        )
         if not callback_params:
             return None
 

@@ -25,10 +25,18 @@ def _session_key(prefix: str, transaction_id: str) -> str:
     return f"{prefix}:{transaction_id}"
 
 
+def _infer_postmessage_callback(on_change: str | None) -> str | None:
+    if on_change and on_change.lower() == "postmessage":
+        return "postMessage"
+    return None
+
+
 def persist_sep24_wallet_callbacks(request: HttpRequest, transaction_id: str) -> None:
     """Save callback params from the query string into the webview session."""
     callback = request.GET.get("callback")
     on_change = request.GET.get("on_change_callback")
+    if not callback:
+        callback = _infer_postmessage_callback(on_change)
     if callback:
         request.session[_session_key(CALLBACK_SESSION_PREFIX, transaction_id)] = callback
     if on_change:
@@ -50,14 +58,25 @@ def _sync_on_change_callback(transaction_id: str, on_change: str) -> None:
         transaction.save(update_fields=["on_change_callback"])
 
 
-def sep24_wallet_callback_query(request: HttpRequest, transaction_id: str) -> dict[str, str]:
-    """Return callback params from the current request or session."""
+def sep24_wallet_callback_query(
+    request: HttpRequest,
+    transaction_id: str,
+    *,
+    transaction=None,
+) -> dict[str, str]:
+    """Return callback params from the request, session, or persisted transaction."""
     callback = request.GET.get("callback") or request.session.get(
         _session_key(CALLBACK_SESSION_PREFIX, transaction_id)
     )
     on_change = request.GET.get("on_change_callback") or request.session.get(
         _session_key(ON_CHANGE_SESSION_PREFIX, transaction_id)
     )
+    if transaction is not None:
+        persisted_on_change = (transaction.on_change_callback or "").strip()
+        if not on_change and persisted_on_change:
+            on_change = persisted_on_change
+        if not callback:
+            callback = _infer_postmessage_callback(on_change or persisted_on_change)
     params: dict[str, str] = {}
     if callback:
         params["callback"] = callback
