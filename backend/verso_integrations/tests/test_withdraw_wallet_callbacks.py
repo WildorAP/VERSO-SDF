@@ -80,6 +80,25 @@ class WithdrawMiddlewareCallbackTests(TestCase):
         self.assertEqual(query["callback"], ["postMessage"])
         self.assertEqual(query["on_change_callback"], ["postMessage"])
 
+    def test_more_info_middleware_restores_callback_from_session(self):
+        session = self.client.session
+        session[f"sep24_wallet_callback:{self.transaction.id}"] = "postMessage"
+        session[f"sep24_wallet_on_change:{self.transaction.id}"] = "postMessage"
+        session.save()
+
+        request = _request_with_session(
+            "GET",
+            f"/sep24/transaction/more_info?id={self.transaction.id}&initialLoad=true",
+            session=self.client.session,
+        )
+        response = Sep24OnboardingMiddleware(_noop)(request)
+
+        self.assertEqual(response.status_code, 302)
+        query = parse_qs(urlparse(response["Location"]).query)
+        self.assertEqual(query["callback"], ["postMessage"])
+        self.assertEqual(query["on_change_callback"], ["postMessage"])
+        self.assertEqual(query["initialLoad"], ["true"])
+
 @override_settings(
     VERSO_MOCK_KYC="approved",
     STORAGES={

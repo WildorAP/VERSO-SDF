@@ -36,6 +36,7 @@ from verso_integrations.sep24.onboarding_flow import (
     form_for_onboarding_step,
     operate_step_for_transaction,
 )
+from verso_integrations.sep24.withdraw_wallet import build_withdraw_post_url
 from verso_integrations.sep24.transaction_views import TERMINAL_TRANSACTION_STATUSES
 from verso_integrations.sep38 import price_for_pair
 from verso_integrations.withdraw import build_payout_bank_details, compute_amount_fiat, usdc_payment_received
@@ -377,6 +378,7 @@ class VersoWithdrawIntegration(WithdrawalIntegration):
                     "template_name": "sep24/onboarding/withdraw_amount.html",
                     "show_rail": True,
                     "show_timeline": False,
+                    "post_url": build_withdraw_post_url(request, transaction),
                     "wallet_short": f"{transaction.stellar_account[:8]}…",
                     "fiat_currency": currency,
                     "fiat_symbol": config.symbol,
@@ -402,6 +404,7 @@ class VersoWithdrawIntegration(WithdrawalIntegration):
                     "template_name": "sep24/onboarding/withdraw_bank.html",
                     "show_rail": True,
                     "show_timeline": False,
+                    "post_url": build_withdraw_post_url(request, transaction),
                     **_meta_display_context(meta),
                 }
             )
