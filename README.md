@@ -484,7 +484,32 @@ python manage.py test verso_integrations
 | `test_kyc_gate.py`            | Onboarding steps (login → register → deposit)   |
 | `test_kyc_views.py`           | DIDIT redirect, onboarding mode switch          |
 
-On every **push** and **pull request**, GitHub Actions runs the same tests against **PostgreSQL + Redis** (`.github/workflows/backend-tests.yml`).
+On every **push** and **pull request**, GitHub Actions runs the same tests against **PostgreSQL + Redis** (`.github/workflows/backend-tests.yml`), including the `reconciliation` app (D3).
+
+## Reconciliation worker (D3)
+
+On-chain USDC movements on the anchor hot wallet are ingested via **Stellar RPC `getEvents`** (CAP-67 SAC events), stored in PostgreSQL, and reconciled against the USDC trustline balance (`getLedgerEntries`).
+
+**One-time bootstrap** (Railway shell after web deploy + migrate):
+
+```powershell
+cd backend
+python manage.py reconciliation_bootstrap
+```
+
+**Worker** (separate Railway service `reconciliation-worker`):
+
+```powershell
+python manage.py reconciliation_worker --loop
+```
+
+**Report** (14-day evidence):
+
+```powershell
+python manage.py reconciliation_report --days 14 --out /tmp/d3_report
+```
+
+See `docs/D3_RECONCILIATION_PLAN.md` for CloudWatch alarms, matching rules, and acceptance criteria.
 
 ## Database
 

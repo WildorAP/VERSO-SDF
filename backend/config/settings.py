@@ -51,6 +51,7 @@ INSTALLED_APPS = [
     "rest_framework",
     "verso_integrations.apps.VersoIntegrationsConfig",
     "polaris",
+    "reconciliation.apps.ReconciliationConfig",
 ]
 
 MIDDLEWARE = [
@@ -187,3 +188,17 @@ if REDIS_URL and not TESTING:
 SESSION_COOKIE_AGE = 600  # segundos
 SESSION_SAVE_EVERY_REQUEST = True
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+
+# D3 — USDC reconciliation (Stellar RPC getEvents)
+STELLAR_RPC_URL = env("STELLAR_RPC_URL", default="")
+RECON_HOT_WALLET = env("RECON_HOT_WALLET", default="")
+RECON_POLL_SECONDS = env.int("RECON_POLL_SECONDS", default=5)
+RECON_INTERVAL_SECONDS = env.int("RECON_INTERVAL_SECONDS", default=60)
+RECON_MATCH_GRACE_SECONDS = env.int("RECON_MATCH_GRACE_SECONDS", default=600)
+RECON_MAX_STALE_SECONDS = env.int("RECON_MAX_STALE_SECONDS", default=300)
+RECON_ALERT_BACKEND = env("RECON_ALERT_BACKEND", default="log")
+RECON_CLOUDWATCH_NAMESPACE = env(
+    "RECON_CLOUDWATCH_NAMESPACE", default="VERSO/AnchorReconciliation"
+)
+RECON_ENV = env("RECON_ENV", default="testnet")
+RECON_SNS_TOPIC_ARN = env("RECON_SNS_TOPIC_ARN", default="")

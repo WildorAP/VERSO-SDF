@@ -72,4 +72,4 @@ jobs:
           LOCAL_MODE: "1"
           SEP10_HOME_DOMAINS: "localhost:8000"
           STELLAR_NETWORK_PASSPHRASE: "Test SDF Network ; September 2015"
-        run: python manage.py test verso_integrations
+        run: python manage.py test verso_integrations reconciliation
