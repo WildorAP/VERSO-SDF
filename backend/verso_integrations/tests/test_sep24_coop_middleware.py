@@ -4,6 +4,14 @@ from django.test import TestCase, override_settings
 @override_settings(
     DEBUG=False,
     SECURE_CROSS_ORIGIN_OPENER_POLICY="same-origin",
+    STORAGES={
+        "default": {
+            "BACKEND": "django.core.files.storage.FileSystemStorage",
+        },
+        "staticfiles": {
+            "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+        },
+    },
 )
 class Sep24CoopMiddlewareTests(TestCase):
     def test_sep24_info_omits_coop_header(self):
