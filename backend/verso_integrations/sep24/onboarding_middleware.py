@@ -11,6 +11,11 @@ from polaris.models import Transaction
 from verso_integrations.models import Sep24DepositMeta, Sep24WithdrawMeta
 from verso_integrations.sep24.kyc_gate import onboarding_step, sync_fiat_currency_from_request
 from verso_integrations.sep24.onboarding_flow import operate_step_for_transaction
+from verso_integrations.sep24.wallet_callbacks import (
+    append_wallet_callbacks_to_url,
+    persist_sep24_wallet_callbacks,
+    sep24_wallet_callback_query,
+)
 
 WEBAPP_PATHS: dict[str, tuple] = {
     "/sep24/transactions/deposit/webapp": (
@@ -46,6 +51,8 @@ class Sep24OnboardingMiddleware:
             except Transaction.DoesNotExist:
                 return self.get_response(request)
 
+            persist_sep24_wallet_callbacks(request, transaction_id)
+
             if kind == Transaction.KIND.withdrawal:
                 meta = Sep24WithdrawMeta.objects.filter(transaction=transaction).first()
                 if (
@@ -53,10 +60,11 @@ class Sep24OnboardingMiddleware:
                     and meta.payout_confirmed_at
                     and transaction.status != Transaction.STATUS.completed
                 ):
-                    params = {"id": str(transaction.id), "initialLoad": "true"}
-                    callback = request.GET.get("callback")
-                    if callback:
-                        params["callback"] = callback
+                    params = {
+                        "id": str(transaction.id),
+                        "initialLoad": "true",
+                        **sep24_wallet_callback_query(request, transaction_id),
+                    }
                     return redirect(f"{reverse('more_info')}?{urlencode(params)}")
 
             if meta_model.objects.filter(transaction=transaction).exists():
@@ -66,7 +74,11 @@ class Sep24OnboardingMiddleware:
 
             step = onboarding_step(request, transaction)
             if step != operate_step_for_transaction(transaction):
-                query = f"transaction_id={transaction_id}"
+                query = append_wallet_callbacks_to_url(
+                    request,
+                    transaction_id,
+                    {"transaction_id": transaction_id},
+                )
                 return redirect(f"{reverse('sep24_onboarding')}?{query}")
             break
 

@@ -25,6 +25,10 @@ from verso_integrations.core_client import (
     sync_kyc,
     user_status,
 )
+from verso_integrations.sep24.wallet_callbacks import (
+    append_wallet_callbacks_to_url,
+    sep24_wallet_callback_query,
+)
 from verso_integrations.sep24.kyc_gate import (
     clear_wants_register,
     get_pending_verso_user,
@@ -88,6 +92,7 @@ def _webapp_url(request: HttpRequest, transaction: Transaction) -> str:
     }
     if amount is not None:
         params["amount"] = amount
+    params.update(sep24_wallet_callback_query(request, str(transaction.id)))
     qparams = urlencode(params)
     return request.build_absolute_uri(f"{reverse(_interactive_view_name(transaction))}?{qparams}")
 
@@ -110,7 +115,11 @@ def _load_deposit_transaction(request: HttpRequest, transaction_id: str | None) 
 
 
 def _onboarding_url(request: HttpRequest, transaction: Transaction) -> str:
-    query = urlencode({"transaction_id": str(transaction.id)})
+    query = append_wallet_callbacks_to_url(
+        request,
+        str(transaction.id),
+        {"transaction_id": str(transaction.id)},
+    )
     return request.build_absolute_uri(f"{reverse('sep24_onboarding')}?{query}")
 
 

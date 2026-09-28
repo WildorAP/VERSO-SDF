@@ -27,6 +27,10 @@ from verso_integrations.sep24.kyc_views import (
     didit_embed_origins_json,
     prepare_kyc_step,
 )
+from verso_integrations.sep24.wallet_callbacks import (
+    append_wallet_callbacks_to_url,
+    persist_sep24_wallet_callbacks,
+)
 from verso_integrations.sep24.onboarding_flow import (
     after_onboarding_form_validation,
     operate_step_for_transaction,
@@ -57,7 +61,11 @@ STEP_TITLES = {
 
 
 def onboarding_url(request: HttpRequest, transaction: Transaction) -> str:
-    query = urlencode({"transaction_id": str(transaction.id)})
+    query = append_wallet_callbacks_to_url(
+        request,
+        str(transaction.id),
+        {"transaction_id": str(transaction.id)},
+    )
     return request.build_absolute_uri(f"{reverse('sep24_onboarding')}?{query}")
 
 
@@ -94,6 +102,8 @@ def sep24_onboarding(request: HttpRequest) -> HttpResponse:
         transaction = _load_transaction(request)
     except ValueError as exc:
         return HttpResponseBadRequest(str(exc))
+
+    persist_sep24_wallet_callbacks(request, str(transaction.id))
 
     if _has_operate_meta(transaction):
         return redirect(_webapp_url(request, transaction))
