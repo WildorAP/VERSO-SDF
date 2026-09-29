@@ -1,6 +1,6 @@
 from unittest.mock import patch
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from verso_integrations.sep1 import (
     return_toml_contents,
@@ -48,3 +48,14 @@ class Sep1TomlTests(TestCase):
     def test_toml_accounts_empty_when_signing_seed_is_invalid(self):
         toml_data = return_toml_contents(None)
         self.assertEqual(toml_data["ACCOUNTS"], [])
+
+
+@override_settings(ROOT_URLCONF="config.urls")
+@patch("polaris.settings.ACTIVE_SEPS", ["sep-1", "sep-10", "sep-24", "sep-38"])
+class Sep1TomlHttpTests(TestCase):
+    def test_stellar_toml_advertises_sep24_but_not_sep6(self):
+        response = self.client.get("/.well-known/stellar.toml")
+        self.assertEqual(response.status_code, 200)
+        lines = [line.split("=")[0].strip() for line in response.content.decode().splitlines()]
+        self.assertIn("TRANSFER_SERVER_SEP0024", lines)
+        self.assertNotIn("TRANSFER_SERVER", lines)

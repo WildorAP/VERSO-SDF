@@ -54,6 +54,10 @@ def return_toml_contents(request, *args, **kwargs):
             pass
 
     return {
+        # Polaris adds TRANSFER_SERVER (the SEP-6 field in SEP-1) whenever SEP-24 is active.
+        # SEP-6 is not implemented, so drop it (None keys are omitted from the TOML) to stop
+        # wallets from offering a SEP-6 flow that returns 404. SEP-24 uses TRANSFER_SERVER_SEP0024.
+        "TRANSFER_SERVER": None,
         "ACCOUNTS": anchor_accounts,
         "CURRENCIES": [
             _usdc_currency(
