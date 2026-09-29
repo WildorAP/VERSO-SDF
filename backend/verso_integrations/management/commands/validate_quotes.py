@@ -26,7 +26,12 @@ from django.core.management.base import BaseCommand, CommandError
 from django.utils.dateparse import parse_datetime
 from stellar_sdk import Keypair, TransactionEnvelope
 
-from verso_integrations.polaris_setup import pen_asset_identification, usdc_asset_identification
+from verso_integrations.polaris_setup import (
+    DELIVERY_PEN_BUY,
+    DELIVERY_PEN_SELL,
+    pen_asset_identification,
+    usdc_asset_identification,
+)
 from verso_integrations.rates import FiatUsdcRate, RatesError, get_pen_usdc_rate
 from verso_integrations.sep38 import _asset_from_quote_id, price_for_pair
 
@@ -71,8 +76,14 @@ def sep10_token(base_url: str, keypair: Keypair) -> str:
 
 
 def request_firm_quote(
-    base_url: str, token: str, sell_asset: str, buy_asset: str, sell_amount: Decimal
+    base_url: str,
+    token: str,
+    sell_asset: str,
+    buy_asset: str,
+    sell_amount: Decimal,
+    delivery_method: dict,
 ) -> dict:
+    """delivery_method: exactly one of sell_delivery_method / buy_delivery_method (Polaris requires it)."""
     response = requests.post(
         f"{base_url}/sep38/quote",
         headers={"Authorization": f"Bearer {token}"},
@@ -80,6 +91,7 @@ def request_firm_quote(
             "sell_asset": sell_asset,
             "buy_asset": buy_asset,
             "sell_amount": str(sell_amount),
+            **delivery_method,
         },
         timeout=HTTP_TIMEOUT,
     )
@@ -142,9 +154,20 @@ class Command(BaseCommand):
 
         pen_id = pen_asset_identification()
         usdc_id = usdc_asset_identification()
+        # On-ramp: client sells PEN by bank transfer; off-ramp: client receives PEN by bank transfer.
         pairs = {
-            "on": (pen_id, usdc_id, Decimal(options["sell_amount_pen"])),
-            "off": (usdc_id, pen_id, Decimal(options["sell_amount_usdc"])),
+            "on": (
+                pen_id,
+                usdc_id,
+                Decimal(options["sell_amount_pen"]),
+                {"sell_delivery_method": DELIVERY_PEN_SELL},
+            ),
+            "off": (
+                usdc_id,
+                pen_id,
+                Decimal(options["sell_amount_usdc"]),
+                {"buy_delivery_method": DELIVERY_PEN_BUY},
+            ),
         }
 
         token = sep10_token(base_url, Keypair.random())
@@ -155,12 +178,14 @@ class Command(BaseCommand):
             direction = options["direction"]
             if direction == "both":
                 direction = "on" if n % 2 else "off"
-            sell_id, buy_id, sell_amount = pairs[direction]
+            sell_id, buy_id, sell_amount, delivery_method = pairs[direction]
 
             try:
                 rate_before = get_pen_usdc_rate()
                 requested_at = datetime.now(timezone.utc)
-                quote = request_firm_quote(base_url, token, sell_id, buy_id, sell_amount)
+                quote = request_firm_quote(
+                    base_url, token, sell_id, buy_id, sell_amount, delivery_method
+                )
                 rate_after = get_pen_usdc_rate()
             except RatesError as exc:
                 raise CommandError(f"VERSO Core rate unavailable: {exc}") from exc
