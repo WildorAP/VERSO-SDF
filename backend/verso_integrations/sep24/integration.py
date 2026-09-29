@@ -20,7 +20,7 @@ from urllib.parse import urlencode
 
 from verso_integrations.deposit import compute_amount_usdc, get_deposit_instructions
 from verso_integrations.models import Sep24DepositMeta
-from verso_integrations.polaris_setup import usdc_asset_identification
+from verso_integrations.polaris_setup import FIAT_SIGNIFICANT_DECIMALS, usdc_asset_identification
 from verso_integrations.rates import RatesError
 from verso_integrations.root import stellar_expert_tx_url
 from verso_integrations.sep24.fiat import fiat_config
@@ -350,7 +350,7 @@ class VersoDepositIntegration(DepositIntegration):
             buy_asset=usdc_id,
             sell_amount=amount_fiat,
             buy_amount=amount_usdc,
-            price=rate.rate_venta.quantize(Decimal("0.01")),
+            price=rate.rate_venta.quantize(Decimal("1").scaleb(-FIAT_SIGNIFICANT_DECIMALS)),
             sell_delivery_method=sell_method,
         )
 

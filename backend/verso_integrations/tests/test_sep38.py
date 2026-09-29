@@ -9,6 +9,7 @@ from polaris.models import Quote
 from stellar_sdk import Keypair
 
 from verso_integrations.polaris_setup import (
+    FIAT_SIGNIFICANT_DECIMALS,
     pen_asset_identification,
     seed_polaris_t2,
     usd_asset_identification,
@@ -26,8 +27,8 @@ class FakeAsset:
 
 class PriceForPairTests(SimpleTestCase):
     def setUp(self):
-        self.pen = FakeAsset(pen_asset_identification(), 2)
-        self.usd = FakeAsset(usd_asset_identification(), 2)
+        self.pen = FakeAsset(pen_asset_identification(), FIAT_SIGNIFICANT_DECIMALS)
+        self.usd = FakeAsset(usd_asset_identification(), FIAT_SIGNIFICANT_DECIMALS)
         self.usdc = FakeAsset(usdc_asset_identification(), 7)
         # rate_venta y rate_compra deliberadamente distintos, para que el test
         # confirme que se usa el lado correcto (no solo "algún número").
@@ -37,7 +38,7 @@ class PriceForPairTests(SimpleTestCase):
     def test_pen_to_usdc_uses_rate_venta(self):
         # Deposito (on-ramp): VERSO vende USDC -> usa rate_venta.
         price = price_for_pair(self.pen, self.usdc, self.pen_rate)
-        self.assertEqual(price, Decimal("3.75"))
+        self.assertEqual(price, Decimal("3.7500"))
 
     def test_usdc_to_pen_uses_inverted_rate_compra(self):
         # Retiro (off-ramp): VERSO compra USDC -> usa rate_compra (invertido).
@@ -46,7 +47,7 @@ class PriceForPairTests(SimpleTestCase):
 
     def test_usd_to_usdc_uses_rate_venta(self):
         price = price_for_pair(self.usd, self.usdc, self.usd_rate)
-        self.assertEqual(price, Decimal("1.00"))
+        self.assertEqual(price, Decimal("1.0010"))
 
     def test_usdc_to_usd_uses_inverted_rate_compra(self):
         price = price_for_pair(self.usdc, self.usd, self.usd_rate)
@@ -84,8 +85,8 @@ class VersoQuoteIntegrationTests(TestCase):
     def setUp(self):
         seed_polaris_t2(distribution_seed=Keypair.random().secret)
         self.integration = VersoQuoteIntegration()
-        self.pen = FakeAsset(pen_asset_identification(), 2)
-        self.usd = FakeAsset(usd_asset_identification(), 2)
+        self.pen = FakeAsset(pen_asset_identification(), FIAT_SIGNIFICANT_DECIMALS)
+        self.usd = FakeAsset(usd_asset_identification(), FIAT_SIGNIFICANT_DECIMALS)
         self.usdc = FakeAsset(usdc_asset_identification(), 7)
 
     @patch("verso_integrations.sep38.get_pen_usdc_rate")
@@ -101,7 +102,7 @@ class VersoQuoteIntegrationTests(TestCase):
             buy_asset=self.usdc,
         )
 
-        self.assertEqual(price, Decimal("3.80"))
+        self.assertEqual(price, Decimal("3.8000"))
         mock_pen_rate.assert_called_once()
 
     @patch("verso_integrations.sep38.get_usd_usdc_rate")
@@ -117,7 +118,7 @@ class VersoQuoteIntegrationTests(TestCase):
             buy_asset=self.usdc,
         )
 
-        self.assertEqual(price, Decimal("1.00"))
+        self.assertEqual(price, Decimal("1.0010"))
         mock_usd_rate.assert_called_once()
 
     @patch("verso_integrations.sep38.get_pen_usdc_rate")

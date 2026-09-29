@@ -2,6 +2,7 @@ from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
 from django.test import TestCase
+from stellar_sdk import Keypair
 from stellar_sdk.exceptions import BadRequestError, NotFoundError
 
 from verso_integrations.stellar_payout import StellarPayoutError, disburse_usdc
@@ -49,3 +50,18 @@ class DisburseUsdcErrorTests(TestCase):
 
         with self.assertRaises(StellarPayoutError):
             disburse_usdc("GBTV5QYBPGHGT2SVUHCFRRKFFWUWHOEPKH7QAXGTJHFGFYZRIE24UOPB", Decimal("10"))
+
+    @patch("polaris.settings.HORIZON_URI", "https://horizon.example.test")
+    @patch("verso_integrations.stellar_payout.Server")
+    def test_uses_polaris_horizon_uri(self, mock_server_cls):
+        mock_server = MagicMock()
+        mock_server.load_account.side_effect = NotFoundError(
+            response=MagicMock(status_code=404, text="", headers={})
+        )
+        mock_server_cls.return_value = mock_server
+
+        with patch.dict("os.environ", {"SIGNING_SEED": Keypair.random().secret}):
+            with self.assertRaises(StellarPayoutError):
+                disburse_usdc("GBTV5QYBPGHGT2SVUHCFRRKFFWUWHOEPKH7QAXGTJHFGFYZRIE24UOPB", Decimal("10"))
+
+        mock_server_cls.assert_called_once_with("https://horizon.example.test")

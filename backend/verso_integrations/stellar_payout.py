@@ -15,8 +15,6 @@ from verso_integrations.sep1 import (
 )
 
 USDC_CODE = "USDC"
-HORIZON_TESTNET = "https://horizon-testnet.stellar.org"
-HORIZON_MAINNET = "https://horizon.stellar.org"
 
 
 class StellarPayoutError(Exception):
@@ -28,9 +26,10 @@ def _network_passphrase() -> str:
 
 
 def _horizon_url() -> str:
-    if _network_passphrase() == TESTNET_PASSPHRASE:
-        return HORIZON_TESTNET
-    return HORIZON_MAINNET
+    """Same Horizon as django-polaris (HORIZON_URI), so both always target one network."""
+    from polaris import settings as polaris_settings
+
+    return polaris_settings.HORIZON_URI
 
 
 def _usdc_issuer() -> str:

@@ -135,7 +135,8 @@ VERSO_CORE_API_URL = env("VERSO_CORE_API_URL", default="http://localhost:9000")
 VERSO_CORE_API_KEY = env("VERSO_CORE_API_KEY", default="")
 
 # Firm SEP-38 quote TTL (seconds). Client expire_after cannot exceed this window.
-VERSO_QUOTE_TTL_SECONDS = env.int("VERSO_QUOTE_TTL_SECONDS", default=900)
+# 180 s (3 min): see README "Quote expiration window" for why not 30 s.
+VERSO_QUOTE_TTL_SECONDS = env.int("VERSO_QUOTE_TTL_SECONDS", default=180)
 
 # SEP-24 CCI/CCE deposit instructions (Perú — one CCI per fiat currency).
 VERSO_CCI_BANK_NAME = env("VERSO_CCI_BANK_NAME", default="BCP")

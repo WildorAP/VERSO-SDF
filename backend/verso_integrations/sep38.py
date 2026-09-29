@@ -79,7 +79,7 @@ def fiat_usdc_rate_for_asset_ids(sell_id: str, buy_id: str) -> FiatUsdcRate:
 def quote_expires_at(quote: Quote) -> datetime:
     """Default firm-quote TTL, honoring client expire_after when within policy."""
     now = datetime.now(timezone.utc)
-    max_ttl = getattr(settings, "VERSO_QUOTE_TTL_SECONDS", 900)
+    max_ttl = getattr(settings, "VERSO_QUOTE_TTL_SECONDS", 180)
     default_expiry = now + timedelta(seconds=max_ttl)
 
     if quote.requested_expire_after:

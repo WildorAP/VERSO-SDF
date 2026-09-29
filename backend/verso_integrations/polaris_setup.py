@@ -20,6 +20,10 @@ USD_SCHEME = "iso4217"
 USD_IDENTIFIER = "USD"
 USD_COUNTRY_CODES = "PER"
 
+# PEN/USD precision for SEP-38. Must match VERSO Core rate precision (4 decimals, e.g. 3.3750):
+# SEP-38 rounds price to the sell asset's decimals, so 2 would turn 3.3750 into 3.38 and 1.0010 into 1.00.
+FIAT_SIGNIFICANT_DECIMALS = 4
+
 DELIVERY_PEN_SELL = "bank_transfer_cci_cce"
 DELIVERY_PEN_BUY = "bank_transfer_cci_cce"
 DELIVERY_USD_SELL = DELIVERY_PEN_SELL
@@ -94,7 +98,7 @@ def seed_polaris_t2(*, distribution_seed: str | None = None) -> dict[str, str]:
         scheme=PEN_SCHEME,
         identifier=PEN_IDENTIFIER,
         defaults={
-            "significant_decimals": 2,
+            "significant_decimals": FIAT_SIGNIFICANT_DECIMALS,
             "country_codes": PEN_COUNTRY_CODES,
             "symbol": "S/",
         },
@@ -105,7 +109,7 @@ def seed_polaris_t2(*, distribution_seed: str | None = None) -> dict[str, str]:
         scheme=USD_SCHEME,
         identifier=USD_IDENTIFIER,
         defaults={
-            "significant_decimals": 2,
+            "significant_decimals": FIAT_SIGNIFICANT_DECIMALS,
             "country_codes": USD_COUNTRY_CODES,
             "symbol": "$",
         },

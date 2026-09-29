@@ -83,7 +83,7 @@ def build_root_payload() -> dict:
     if "sep-24" in _active_seps():
         endpoints.append(
             {
-                "label": "Interactive deposit (PEN → USDC)",
+                "label": "Interactive deposit & withdrawal (PEN ↔ USDC)",
                 "sep": "SEP-24",
                 "path": "/sep24",
                 "url": f"{host}/sep24",
@@ -118,8 +118,11 @@ def build_root_payload() -> dict:
                 "id": "T2",
                 "seps": ["SEP-24", "SEP-38"],
                 "status": "in_progress",
-                "status_label": "Etapa 3 MVP (local/testnet)",
-                "scope": "SEP-38 cotizaciones, webview PEN→USDC, confirmación fiat mock (admin); KYC Etapa 4",
+                "status_label": "En testnet (cierre de entregables)",
+                "scope": (
+                    "SEP-24 depósito PEN→USDC y retiro USDC→PEN con login VERSO y KYC; "
+                    "SEP-38 cotizaciones en vivo; conciliación on-chain de USDC (Stellar RPC)"
+                ),
             },
             {
                 "id": "T3",
