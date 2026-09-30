@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 from django.test import SimpleTestCase, TestCase, override_settings
 from polaris import settings as polaris_settings
-from polaris.models import Quote
+from polaris.models import DeliveryMethod, OffChainAsset, Quote
 from stellar_sdk import Keypair
 
 from verso_integrations.polaris_setup import (
@@ -88,6 +88,19 @@ class VersoQuoteIntegrationTests(TestCase):
         self.pen = FakeAsset(pen_asset_identification(), FIAT_SIGNIFICANT_DECIMALS)
         self.usd = FakeAsset(usd_asset_identification(), FIAT_SIGNIFICANT_DECIMALS)
         self.usdc = FakeAsset(usdc_asset_identification(), 7)
+
+    def test_usd_uses_only_cci_cce_in_peru(self):
+        DeliveryMethod.objects.create(
+            name="wire_usd", type=DeliveryMethod.TYPE.sell, description="legacy"
+        )
+        seed_polaris_t2(distribution_seed=Keypair.random().secret)
+
+        usd = OffChainAsset.objects.get(scheme="iso4217", identifier="USD")
+        self.assertEqual(usd.country_codes, "PER")
+        self.assertEqual(
+            {m.name for m in usd.delivery_methods.all()}, {"bank_transfer_cci_cce"}
+        )
+        self.assertFalse(DeliveryMethod.objects.filter(name="wire_usd").exists())
 
     @patch("verso_integrations.sep38.get_pen_usdc_rate")
     def test_get_price_fetches_live_pen_rate(self, mock_pen_rate):

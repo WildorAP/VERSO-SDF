@@ -28,6 +28,8 @@ DELIVERY_PEN_SELL = "bank_transfer_cci_cce"
 DELIVERY_PEN_BUY = "bank_transfer_cci_cce"
 DELIVERY_USD_SELL = DELIVERY_PEN_SELL
 DELIVERY_USD_BUY = DELIVERY_PEN_BUY
+# Delivery methods from earlier seeds that VERSO does not offer; removed on every seed run.
+LEGACY_DELIVERY_METHODS = ("wire_usd",)
 
 
 def usdc_issuer() -> str:
@@ -83,16 +85,18 @@ def seed_polaris_t2(*, distribution_seed: str | None = None) -> dict[str, str]:
         name=DELIVERY_PEN_SELL,
         type=DeliveryMethod.TYPE.sell,
         defaults={
-            "description": "Transferencia bancaria PEN vía CCI/CCE (Perú).",
+            "description": "Transferencia bancaria PEN o USD vía CCI/CCE (Perú).",
         },
     )
     pen_buy_method, _ = DeliveryMethod.objects.update_or_create(
         name=DELIVERY_PEN_BUY,
         type=DeliveryMethod.TYPE.buy,
         defaults={
-            "description": "Recepción de PEN en cuenta bancaria peruana vía CCI/CCE.",
+            "description": "Recepción de PEN o USD en cuenta bancaria peruana vía CCI/CCE.",
         },
     )
+
+    DeliveryMethod.objects.filter(name__in=LEGACY_DELIVERY_METHODS).delete()
 
     pen_asset, pen_created = OffChainAsset.objects.update_or_create(
         scheme=PEN_SCHEME,

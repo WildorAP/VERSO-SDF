@@ -74,7 +74,7 @@ def build_root_payload() -> dict:
     if "sep-38" in _active_seps():
         endpoints.append(
             {
-                "label": "Quote server (PEN & USD / USDC)",
+                "label": "Quote server (PEN/USD ↔ USDC)",
                 "sep": "SEP-38",
                 "path": "/sep38",
                 "url": f"{host}/sep38",
@@ -83,7 +83,7 @@ def build_root_payload() -> dict:
     if "sep-24" in _active_seps():
         endpoints.append(
             {
-                "label": "Interactive deposit & withdrawal (PEN ↔ USDC)",
+                "label": "Interactive deposit & withdrawal (PEN/USD ↔ USDC)",
                 "sep": "SEP-24",
                 "path": "/sep24",
                 "url": f"{host}/sep24",
@@ -120,7 +120,7 @@ def build_root_payload() -> dict:
                 "status": "in_progress",
                 "status_label": "En testnet (cierre de entregables)",
                 "scope": (
-                    "SEP-24 depósito PEN→USDC y retiro USDC→PEN con login VERSO y KYC; "
+                    "SEP-24 depósito PEN/USD→USDC y retiro USDC→PEN/USD vía CCI/CCE, con login VERSO y KYC; "
                     "SEP-38 cotizaciones en vivo; conciliación on-chain de USDC (Stellar RPC)"
                 ),
             },

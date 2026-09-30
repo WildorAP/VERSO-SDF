@@ -196,7 +196,7 @@ The correct place in the protocol for the KYC check and the DIDIT onboarding red
 
 **Operational note:** Stellar RPC keeps a limited event history (a few days on public providers). If the worker were down longer than that window, events could not be backfilled from RPC. Two safeguards cover this: the CloudWatch `verso-recon-heartbeat` alarm treats missing heartbeats as breaching, so it fires after ~5 minutes without the worker, long before the retention window ends; and if the cursor ever falls outside the retention window, the worker records a critical `worker_stale` discrepancy (`reconciliation/sync.py`) instead of silently skipping events. The balance check would also expose any missed movement as a `balance_mismatch`. The Polaris SEP-24 withdrawal watcher (`watch_transactions`, service **RETIRO**) still uses Horizon, because that is how django-polaris is built; this affects only transaction status detection, not reconciliation.
 
-**Where Horizon is still used, and why.** django-polaris 2.x only supports Horizon: `watch_transactions` (service **RETIRO**, detects inbound USDC for withdrawals), `process_pending_deposits` (service **DEPOSITO**, submits USDC payouts) and SEP-10 account loading all go through Polaris' `HORIZON_URI`. This is a limitation of the library, not a design choice; replacing it would mean forking Polaris or rewriting its workers, which no Tranche 2 deliverable requires. VERSO's own code follows a single rule: the reconciliation service uses Stellar RPC, and the T1 admin payout (`stellar_payout.py`) reuses Polaris' `HORIZON_URI` so every component always targets the same network. Because Horizon is being phased out, the Polaris Horizon dependency will be reviewed before mainnet (T3). Full design: `docs/D3_RECONCILIATION_PLAN.md` §0 and §3 (Spanish).
+**Where Horizon is still used, and why.** django-polaris 2.x only supports Horizon: `watch_transactions` (service **RETIRO**, detects inbound USDC for withdrawals), `process_pending_deposits` (service **DEPOSITO**, submits USDC payouts) and SEP-10 account loading all go through Polaris' `HORIZON_URI`. This is a limitation of the library, not a design choice; replacing it would mean forking Polaris or rewriting its workers, which no Tranche 2 deliverable requires. VERSO's own code follows a single rule: the reconciliation service uses Stellar RPC, and the T1 admin payout (`stellar_payout.py`) reuses Polaris' `HORIZON_URI` so every component always targets the same network. Because Horizon is being phased out, the Polaris Horizon dependency will be reviewed before mainnet (T3).
 
 ## Deliverable status — Tranche 2 (SCF #44)
 
@@ -305,7 +305,7 @@ The SEP-24 webview is not affected: deposits and withdrawals lock the price when
 2. **Monitoring with no unresolved discrepancies:** **0 discrepancies** since bootstrap (2026-09-28). The formal 14-day window is a **planned deviation**, moved to mainnet (see below).
 3. **CloudWatch alerts:** 4 alarms + SNS email, tested on 2026-09-29 with a synthetic critical discrepancy (OK → ALARM → OK).
 
-Evidence: `docs/T2_EVIDENCE.md` → Deliverable 3. Design: `docs/D3_RECONCILIATION_PLAN.md` (Spanish).
+Evidence: `docs/T2_EVIDENCE.md` → Deliverable 3.
 
 #### Reconciliation worker
 
@@ -356,7 +356,7 @@ VERSO documents this **intentional deviation**:
 **Why:** testnet uses simulated fiat settlement and low traffic; holding the calendar for 14 days on testnet does not
 add operational signal once thousands of consecutive `ReconciliationRun` rows show `delta=0`. The same worker, alerts,
 and report code apply on mainnet—only environment variables change (`STELLAR_NETWORK_PASSPHRASE`, **`HORIZON_URI`**, `STELLAR_RPC_URL`,
-`RECON_ENV`, issuers). See `docs/D3_RECONCILIATION_PLAN.md` §0 for the full rationale (Spanish).
+`RECON_ENV`, issuers).
 
 **SCF evidence on testnet today:** admin screenshots or CSV of reconciliation runs; export via
 `/admin/reconciliation/report/?days=N` or `reconciliation_report --days N --out …` covering elapsed time since
@@ -369,8 +369,6 @@ python manage.py reconciliation_report --days 14 --out /tmp/d3_report
 ```
 
 Admin ZIP download: `/admin/reconciliation/report/?days=14`
-
-See `docs/D3_RECONCILIATION_PLAN.md` for CloudWatch alarms, matching rules, and acceptance criteria.
 
 #### CloudWatch alerts — setup
 
@@ -444,10 +442,7 @@ Apply the same values on **VERSO-SDF**, **DEPOSITO**, **RETIRO**, and **RECONCIL
 
 ## Documentation
 
-| Document                                                             | Content                                                                 |
-| -------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| [`docs/T2_EVIDENCE.md`](docs/T2_EVIDENCE.md)                         | Tranche 2 evidence: transactions, quotes, reconciliation report, alerts |
-| [`docs/D3_RECONCILIATION_PLAN.md`](docs/D3_RECONCILIATION_PLAN.md)   | D3 design: RPC `getEvents`, matching, CloudWatch (Spanish)              |
+- [`docs/T2_EVIDENCE.md`](docs/T2_EVIDENCE.md) — Tranche 2 evidence: transactions, quotes, reconciliation report and alerts.
 
 ## License
 
