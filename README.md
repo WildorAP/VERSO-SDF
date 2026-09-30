@@ -358,10 +358,23 @@ Deployed on **Railway** from `main` with **PostgreSQL** and **Redis**. The web s
 
 ## Tests
 
+Requires **Python 3.12**. From a fresh clone (PowerShell; on Linux/macOS use `source venv/bin/activate` and `cp`):
+
 ```powershell
+python -m venv venv
+.\venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+
 cd backend
+Copy-Item .env.example .env
+# SIGNING_SEED must be a valid Stellar secret key; generate a throwaway one:
+python -c "from stellar_sdk import Keypair; print(Keypair.random().secret)"
+# paste the printed S... value as SIGNING_SEED in backend/.env
+
 python manage.py test verso_integrations reconciliation
 ```
+
+No PostgreSQL or Redis is needed locally (SQLite by default).
 
 **182 tests** (147 in `verso_integrations`, 35 in `reconciliation`) covering SEP-1, SEP-10, SEP-24 (on-ramp, off-ramp, KYC gate), SEP-38 pricing and quotes, and the D3 reconciliation (event parsing, sync, matching, reconcile, alerts, report). GitHub Actions runs them on every push and pull request against **PostgreSQL + Redis** (`.github/workflows/backend-tests.yml`).
 
