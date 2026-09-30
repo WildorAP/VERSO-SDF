@@ -43,3 +43,7 @@ Thumbs.db
 # Local dev scripts (not part of deployed anchor)
 backend/scripts/test_sep10.py
 backend/scripts/test_invalid_auth.py
+
+# Internal docs (team only, not published)
+docs/DEVELOPMENT.md
+docs/OPERATIONS.md

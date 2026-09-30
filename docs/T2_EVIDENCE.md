@@ -57,8 +57,8 @@ operations send fiat and confirm in admin (**Mark fiat sent**) → `completed`.
 ### Excluded from the evidence — internal test transactions
 
 These 4 rows are **internal test transactions** run on 2026-09-27, while the SEP-24 webview and workers
-were being configured and before production mock shortcuts were turned off (see README *Production
-configuration checklist → No mocks in production*). They have status `completed` in Polaris but
+were being configured and before production mock shortcuts were turned off (see README *Production (testnet)* →
+*No mocks in production*). They have status `completed` in Polaris but
 **no on-chain USDC** (`stellar_transaction_id` empty), so they are **not counted** as deliverable evidence.
 They predate the reconciliation observation window (bootstrap 2026-09-28), so they do not affect the
 D3 balances, and no real or testnet funds moved for them.
@@ -160,7 +160,7 @@ to completed withdrawal `a7a3c42e-15af-4c35-b4e8-94467ac20e28` in Deliverable 1.
 **Result:** 4 alarms configured; a synthetic critical discrepancy moved `verso-recon-open-discrepancies`
 to **ALARM**, the email alerts were delivered through SNS, and the alarm returned to **OK** automatically.
 
-**Configuration** (AWS account `436629684204`, region `us-east-1`):
+**Configuration** (AWS region `us-east-1`):
 
 - Worker **RECONCILIATION** publishes every ~60 s to namespace `VERSO/AnchorReconciliation`
   (dimension `Environment=testnet`): `OpenDiscrepancies`, `CriticalOpenDiscrepancies`, `BalanceDeltaAbs`,
@@ -174,7 +174,7 @@ to **ALARM**, the email alerts were delivered through SNS, and the alarm returne
 | `verso-recon-heartbeat` | `Heartbeat` | no heartbeat for 300 s (missing data = breaching) |
 | `verso-recon-ledger-lag` | `LedgerLag` | > 60 ledgers behind in 2 of 3 periods |
 
-- All alarms notify SNS topic `arn:aws:sns:us-east-1:436629684204:verso-anchor-recon-testnet`
+- All alarms notify SNS topic `verso-anchor-recon-testnet`
   (ALARM and OK actions), with the operations email subscribed and confirmed.
 - Credentials: dedicated IAM user `verso-anchor-recon` with a least-privilege policy
   (`cloudwatch:PutMetricData`, `PutMetricAlarm`, `DescribeAlarms`; `sns:Publish`, `CreateTopic`, `Subscribe`
