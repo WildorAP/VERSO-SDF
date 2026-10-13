@@ -9,6 +9,8 @@ import os
 
 from stellar_sdk import Keypair
 
+from verso_integrations.turnkey_signer import turnkey_sign_with
+
 USDC_ISSUER_MAINNET = "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN"
 USDC_ISSUER_TESTNET = "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"
 TESTNET_PASSPHRASE = "Test SDF Network ; September 2015"
@@ -44,11 +46,18 @@ def _usdc_currency(anchor_asset: str, description: str, redemption: str) -> dict
 
 
 def return_toml_contents(request, *args, **kwargs):
+    # T3: the Turnkey hot wallet (USDC payouts / withdrawals) is listed first; the SEP-10
+    # signing account is also controlled by VERSO, so it stays in ACCOUNTS.
     anchor_accounts = []
+    turnkey_wallet = turnkey_sign_with()
+    if turnkey_wallet:
+        anchor_accounts.append(turnkey_wallet)
     signing_seed = os.environ.get("SIGNING_SEED", "").strip()
     if signing_seed:
         try:
-            anchor_accounts.append(Keypair.from_secret(signing_seed).public_key)
+            signing_account = Keypair.from_secret(signing_seed).public_key
+            if signing_account not in anchor_accounts:
+                anchor_accounts.append(signing_account)
         except Exception:
             # Invalid SIGNING_SEED in env — avoid 500 on GET stellar.toml
             pass
