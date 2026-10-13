@@ -120,6 +120,8 @@ The decoded payload confirms `iss: https://anchor.versotek.io/auth` and a `sub` 
 
 **Implemented (simulation via Django Admin).** `FiatDeposit` model, Django Admin actions and on-chain USDC payout signed with `SIGNING_SEED`.
 
+> **Retired in Tranche 3.** The **Simulated fiat deposits** admin section, its action **Disburse USDC on-chain** and the module `stellar_payout.py` were removed: since T2 every on-chain payout goes through the SEP-24 flow (Polaris `process_pending_deposits`), which in T3 signs through the Turnkey custody integration (`verso_integrations/custody.py`). This leaves a single signing path for USDC payouts and no funded key on the server. The `FiatDeposit` model and its historical records stay in the database (D3 reconciliation still matches them), and the evidence below is kept unchanged.
+
 Operator flow:
 
 1. Admin → **Simulated fiat deposits** → **Add** (client `G...` account, PEN amount and **exchange rate**; USDC is computed automatically).
@@ -170,7 +172,7 @@ Improvements merged into `main` before external review (branch `hardening/pre-au
 | Stellar timeout     | `stellar_payout.py`           | Transaction built with `set_timeout(180)` (previously 30 s)                                  |
 | Admin session       | `settings.py`                 | `SESSION_COOKIE_AGE = 600` (10 min of inactivity)                                            |
 
-Automated coverage: `test_deposit_concurrency.py`, `test_stellar_payout.py`.
+Automated coverage: `test_deposit_concurrency.py`, `test_stellar_payout.py` (both removed in T3 together with the T1 payout action; the equivalent guarantees for SEP-24 payouts — no double payment, safe retry — are covered by `test_custody.py`).
 
 ## Deliverable status — Tranche 2 (SCF #44)
 
@@ -393,7 +395,6 @@ Moving from testnet to mainnet is **not** a single variable. django-polaris read
 | `RECON_ENV`                                         | `testnet`                                   | `mainnet` (CloudWatch dimension)                      |
 | `HOST_URL` / `ALLOWED_HOSTS` / `SEP10_HOME_DOMAINS` | Production testnet domain                   | Production mainnet domain                             |
 | Polaris assets                                      | `seed_polaris_t2` (testnet USDC issuer)     | Re-seed or migrate assets for mainnet issuer          |
-| `verso_integrations/stellar_payout.py`              | Reads Polaris `HORIZON_URI` (single source) | Nothing extra — follows `HORIZON_URI` automatically   |
 
 Apply the same values on **VERSO-SDF**, **DEPOSITO**, **RETIRO**, and **RECONCILIATION** (all workers use Polaris and/or RPC). After mainnet cutover, run `reconciliation_bootstrap --force` on a fresh observation window (D3).
 
@@ -421,7 +422,7 @@ The correct place in the protocol for the KYC check and the DIDIT onboarding red
 
 **Operational note:** Stellar RPC keeps a limited event history (a few days on public providers). If the worker were down longer than that window, events could not be backfilled from RPC. Two safeguards cover this: the CloudWatch `verso-recon-heartbeat` alarm treats missing heartbeats as breaching, so it fires after ~5 minutes without the worker, long before the retention window ends; and if the cursor ever falls outside the retention window, the worker records a critical `worker_stale` discrepancy (`reconciliation/sync.py`) instead of silently skipping events. The balance check would also expose any missed movement as a `balance_mismatch`.
 
-**Where Horizon is still used, and why.** django-polaris 2.x only supports Horizon: `watch_transactions` (service **RETIRO**, detects inbound USDC for withdrawals), `process_pending_deposits` (service **DEPOSITO**, submits USDC payouts) and SEP-10 account loading all go through Polaris' `HORIZON_URI`. This is a limitation of the library, not a design choice; replacing it would mean forking Polaris or rewriting its workers, which no Tranche 2 deliverable requires. VERSO's own code follows a single rule: the reconciliation service uses Stellar RPC, and the T1 admin payout (`stellar_payout.py`) reuses Polaris' `HORIZON_URI` so every component always targets the same network. Because Horizon is being phased out, the Polaris Horizon dependency will be reviewed before mainnet (T3).
+**Where Horizon is still used, and why.** django-polaris 2.x only supports Horizon: `watch_transactions` (service **RETIRO**, detects inbound USDC for withdrawals), `process_pending_deposits` (service **DEPOSITO**, submits USDC payouts) and SEP-10 account loading all go through Polaris' `HORIZON_URI`. This is a limitation of the library, not a design choice; replacing it would mean forking Polaris or rewriting its workers, which no Tranche 2 deliverable requires. VERSO's own code follows a single rule: the reconciliation service uses Stellar RPC, and VERSO's Turnkey custody integration (`custody.py`) reuses Polaris' `HORIZON_URI` so every component always targets the same network. Because Horizon is being phased out, the Polaris Horizon dependency will be reviewed before mainnet (T3).
 
 ## Documentation
 

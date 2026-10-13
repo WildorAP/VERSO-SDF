@@ -14,11 +14,18 @@ class VersoIntegrationsConfig(AppConfig):
         from .sep24.withdraw_integration import VersoWithdrawIntegration
         from .sep38 import VersoQuoteIntegration
         from .rails import VersoRailsIntegration
+        from .turnkey_signer import turnkey_enabled
 
-        register_integrations(
+        integrations = dict(
             toml=return_toml_contents,
             quote=VersoQuoteIntegration(),
             deposit=VersoDepositIntegration(),
             withdrawal=VersoWithdrawIntegration(),
             rails=VersoRailsIntegration(),
         )
+        if turnkey_enabled():
+            from .custody import VersoCustodyIntegration
+
+            integrations["custody"] = VersoCustodyIntegration()
+
+        register_integrations(**integrations)

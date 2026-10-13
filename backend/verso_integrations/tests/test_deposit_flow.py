@@ -1,9 +1,6 @@
 from decimal import Decimal
-from unittest.mock import patch
 
-from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
-from django.urls import reverse
 from stellar_sdk import Keypair
 
 from verso_integrations.deposit import compute_amount_usdc, get_cci_deposit_instructions
@@ -72,53 +69,10 @@ class FiatDepositModelTests(TestCase):
             deposit.full_clean()
 
 
-class FiatDepositAdminTests(TestCase):
-    def setUp(self):
-        user_model = get_user_model()
-        self.admin_user = user_model.objects.create_superuser(
-            username="admin",
-            email="admin@test.local",
-            password="testpass123",
-        )
-        self.client.login(username="admin", password="testpass123")
-        self.account = Keypair.random().public_key
-        self.deposit = FiatDeposit.objects.create(
-            stellar_account=self.account,
-            amount_pen=Decimal("50.00"),
-            tipo_cambio=Decimal("4.0000"),
-            bank_instructions={"bank_name": "BCP", "reference": "TXN-1"},
-        )
+class FiatDepositAdminRetiredTests(TestCase):
+    """T3: the T1 "simulated fiat deposits" admin is retired; records stay in the DB for reconciliation."""
 
-    def test_mark_fiat_received_action(self):
-        url = reverse("admin:verso_integrations_fiatdeposit_changelist")
-        response = self.client.post(
-            url,
-            {
-                "action": "mark_fiat_received",
-                "_selected_action": [str(self.deposit.pk)],
-            },
-        )
-        self.assertEqual(response.status_code, 302)
-        self.deposit.refresh_from_db()
-        self.assertEqual(self.deposit.status, FiatDeposit.Status.FIAT_CONFIRMED)
+    def test_simulated_deposits_are_not_in_the_admin(self):
+        from django.contrib import admin
 
-    @patch("verso_integrations.admin.send_usdc_on_chain", return_value="abc123hash")
-    def test_disburse_usdc_action(self, mock_disburse):
-        self.deposit.status = FiatDeposit.Status.FIAT_CONFIRMED
-        self.deposit.save(update_fields=["status"])
-
-        url = reverse("admin:verso_integrations_fiatdeposit_changelist")
-        response = self.client.post(
-            url,
-            {
-                "action": "disburse_usdc",
-                "_selected_action": [str(self.deposit.pk)],
-            },
-        )
-        self.assertEqual(response.status_code, 302)
-        mock_disburse.assert_called_once_with(self.account, Decimal("12.5000000"))
-
-        self.deposit.refresh_from_db()
-        self.assertEqual(self.deposit.status, FiatDeposit.Status.DISBURSED)
-        self.assertEqual(self.deposit.stellar_tx_hash, "abc123hash")
-        self.assertIsNotNone(self.deposit.disbursed_at)
+        self.assertFalse(admin.site.is_registered(FiatDeposit))

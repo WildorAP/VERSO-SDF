@@ -1,0 +1,36 @@
+{
+  "period_start": "2026-09-29T18:25:47.496920+00:00",
+  "period_end": "2026-10-13T18:25:47.496920+00:00",
+  "network_passphrase": "Test SDF Network ; September 2015",
+  "hot_wallet": "GBTV5QYBPGHGT2SVUHCFRRKFFWUWHOEPKH7QAXGTJHFGFYZRIE24UOPB",
+  "asset_contract_id": "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA",
+  "start_ledger": 4919889,
+  "opening_balance": "28.7778026",
+  "onchain_balance_final": "51.7792212",
+  "internal_balance_final": "51.7792212",
+  "runs_total": 20068,
+  "runs_ok": 20068,
+  "runs_mismatch": 0,
+  "runs_skipped": 0,
+  "runs_ok_percent": 100.0,
+  "events_total": 13,
+  "events_by_direction": {
+    "inbound": 7,
+    "outbound": 6
+  },
+  "events_by_match_kind": {
+    "sep24_withdrawal": 7,
+    "sep24_deposit": 6
+  },
+  "discrepancies_detected": 0,
+  "discrepancies_resolved": 0,
+  "discrepancies_open_now": 0,
+  "discrepancies_by_kind": {},
+  "avg_resolution_seconds": null,
+  "max_ledger_lag": 1,
+  "heartbeat_gaps_over_stale_threshold": [],
+  "heartbeat_stale_threshold_seconds": 300,
+  "reconcile_interval_seconds": 60,
+  "no_unresolved_discrepancies": true,
+  "method": "Stellar RPC getEvents + getLedgerEntries trustline balance"
+}

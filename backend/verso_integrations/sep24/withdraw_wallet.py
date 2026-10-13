@@ -13,7 +13,7 @@ import logging
 
 from django.http import HttpRequest
 from django.urls import reverse
-from polaris.integrations import registered_custody_integration as rci
+import polaris.integrations
 from polaris.models import Transaction
 from polaris.utils import validate_account_and_memo
 
@@ -55,7 +55,9 @@ def ensure_withdraw_receiving_details(transaction: Transaction) -> bool:
 
     try:
         receiving_account, memo, memo_type = validate_account_and_memo(
-            *rci.get_receiving_account_and_memo(request=None, transaction=transaction)
+            *polaris.integrations.registered_custody_integration.get_receiving_account_and_memo(
+                request=None, transaction=transaction
+            )
         )
     except ValueError:
         logger.exception(

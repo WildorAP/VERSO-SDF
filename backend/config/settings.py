@@ -198,6 +198,17 @@ RECON_INTERVAL_SECONDS = env.int("RECON_INTERVAL_SECONDS", default=60)
 RECON_MATCH_GRACE_SECONDS = env.int("RECON_MATCH_GRACE_SECONDS", default=600)
 RECON_MAX_STALE_SECONDS = env.int("RECON_MAX_STALE_SECONDS", default=300)
 RECON_ALERT_BACKEND = env("RECON_ALERT_BACKEND", default="log")
+
+# T3 — Custodia de la hot wallet con Turnkey (la llave privada nunca está en este servidor).
+# TURNKEY_SIGN_WITH (dirección pública) activa la custodia en todos los servicios;
+# las credenciales de la API solo se configuran en el servicio que firma (DEPOSITO).
+TURNKEY_SIGN_WITH = env("TURNKEY_SIGN_WITH", default="")
+TURNKEY_ORGANIZATION_ID = env("TURNKEY_ORGANIZATION_ID", default="")
+TURNKEY_API_PUBLIC_KEY = env("TURNKEY_API_PUBLIC_KEY", default="")
+TURNKEY_API_PRIVATE_KEY = env("TURNKEY_API_PRIVATE_KEY", default="")
+TURNKEY_API_BASE_URL = env("TURNKEY_API_BASE_URL", default="https://api.turnkey.com")
+# Tope por pago on-chain; si se supera, el depósito queda "blocked" para revisión del operador. Vacío o 0 = sin tope.
+MAX_PAYOUT_USDC = env("MAX_PAYOUT_USDC", default="1000")
 RECON_CLOUDWATCH_NAMESPACE = env(
     "RECON_CLOUDWATCH_NAMESPACE", default="VERSO/AnchorReconciliation"
 )

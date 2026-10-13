@@ -34,9 +34,12 @@ def hot_wallet() -> str:
     explicit = getattr(settings, "RECON_HOT_WALLET", "") or os.environ.get("RECON_HOT_WALLET", "")
     if explicit.strip():
         return explicit.strip()
+    turnkey_wallet = (getattr(settings, "TURNKEY_SIGN_WITH", "") or "").strip()
+    if turnkey_wallet:
+        return turnkey_wallet
     seed = os.environ.get("SIGNING_SEED", "").strip()
     if not seed:
-        raise RuntimeError("RECON_HOT_WALLET or SIGNING_SEED must be configured.")
+        raise RuntimeError("RECON_HOT_WALLET, TURNKEY_SIGN_WITH or SIGNING_SEED must be configured.")
     return Keypair.from_secret(seed).public_key
 
 

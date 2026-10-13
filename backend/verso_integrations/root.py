@@ -34,6 +34,10 @@ def stellar_expert_tx_url(stellar_transaction_id: str) -> str:
 
 
 def _anchor_account() -> str | None:
+    """Account that moves USDC: the Turnkey hot wallet when custody is enabled."""
+    turnkey_wallet = os.environ.get("TURNKEY_SIGN_WITH", "").strip()
+    if turnkey_wallet:
+        return turnkey_wallet
     signing_seed = os.environ.get("SIGNING_SEED", "").strip()
     if not signing_seed:
         return None
