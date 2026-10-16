@@ -12,7 +12,7 @@ Repository kept separate from the VERSO core (`BASE_DE_CLIENTES`, [versotek.io](
 | ------- | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **T1**  | SEP-1, SEP-10  | Complete on testnet (`anchor.versotek.io`) — 3 deliverables verified, see details below                                                                                                                                                  |
 | **T2**  | SEP-24, SEP-38 | **In testnet** — SEP-24 on-ramp + off-ramp webview (VERSO login, KYC gate), SEP-38 quotes, D3 USDC reconciliation. **Workers on Railway** (DEPOSITO, RETIRO, RECONCILIATION). **Evidence:** [`docs/T2_EVIDENCE.md`](docs/T2_EVIDENCE.md) |
-| **T3**  | Mainnet        | Pending                                                                                                                                                                                                                                  |
+| **T3**  | Mainnet        | **In progress** — hot wallet custody migrated to Turnkey and verified on testnet (see deviation 2). Mainnet launch pending |
 
 ## Deliverable status — Tranche 1 (SCF #44)
 
@@ -25,7 +25,7 @@ Repository kept separate from the VERSO core (`BASE_DE_CLIENTES`, [versotek.io](
 - Status landing page at [anchor.versotek.io/](https://anchor.versotek.io/) (HTML for reviewers; JSON manifest at `?format=json`), implemented in `root.py` + `templates/verso_integrations/root.html`.
 - Service health: confirmed operational on Railway (automatic deploy from `main`).
 
-See "Architecture note" below for the documented deviations (Polaris instead of Anchor Platform Docker; signing seed management without AWS KMS; KYC deferred to T2).
+See "Architecture note" below for the documented deviations (Polaris instead of Anchor Platform Docker; hot wallet custody with Turnkey instead of AWS KMS; KYC deferred to T2).
 
 ### Deliverable 2 — SEP-10: Wallet authentication connected to VERSO's compliance system
 
@@ -391,22 +391,52 @@ Moving from testnet to mainnet is **not** a single variable. django-polaris read
 | `STELLAR_NETWORK_PASSPHRASE`                        | `Test SDF Network ; September 2015`         | `Public Global Stellar Network ; September 2015`      |
 | **`HORIZON_URI`**                                   | `https://horizon-testnet.stellar.org`       | **`https://horizon.stellar.org`**                     |
 | `STELLAR_RPC_URL` (D3 reconciliation)               | `https://soroban-testnet.stellar.org`       | Mainnet Soroban RPC URL (**required**; no default)    |
-| `SIGNING_SEED`                                      | Testnet distribution key                    | **Mainnet** key (new seed; KMS/HSM before real funds) |
+| `SIGNING_SEED`                                      | SEP-10 signing key                          | **New mainnet seed**, SEP-10 only — **holds no funds** |
+| `TURNKEY_SIGN_WITH` (all services)                  | Turnkey testnet wallet `GDNP…FF5S`          | New Turnkey **mainnet** wallet (separate service user) |
+| `TURNKEY_ORGANIZATION_ID` / `TURNKEY_API_*` (DEPOSITO only) | Testnet service user `verso-anchor` | Mainnet service user API key                          |
 | `RECON_ENV`                                         | `testnet`                                   | `mainnet` (CloudWatch dimension)                      |
 | `HOST_URL` / `ALLOWED_HOSTS` / `SEP10_HOME_DOMAINS` | Production testnet domain                   | Production mainnet domain                             |
 | Polaris assets                                      | `seed_polaris_t2` (testnet USDC issuer)     | Re-seed or migrate assets for mainnet issuer          |
+| `VERSO_CCI_*` / `VERSO_USD_CCI_*`                   | Test CCI details                            | CCI of VERSO's operating bank account (PEN / USD)     |
+| `LOCAL_MODE`, `VERSO_MOCK_*`                        | Test helpers may be enabled                 | `LOCAL_MODE=0`; every `VERSO_MOCK_*` empty or `0`     |
 
-Apply the same values on **VERSO-SDF**, **DEPOSITO**, **RETIRO**, and **RECONCILIATION** (all workers use Polaris and/or RPC). After mainnet cutover, run `reconciliation_bootstrap --force` on a fresh observation window (D3).
+Apply the same values on **VERSO-SDF**, **DEPOSITO**, **RETIRO**, and **RECONCILIATION** (all workers use Polaris and/or RPC). After mainnet cutover, run `reconciliation_bootstrap --force` on a fresh observation window (D3). The reconciliation worker refuses to start when the configured hot wallet differs from the one stored at bootstrap (`SyncState hot_wallet mismatch`), so run the bootstrap from another service sharing the database (e.g. `VERSO-SDF`) and export `reconciliation_report` first: `--force` resets the ledger entries.
+
+The mainnet hot wallet's USDC trustline is created with `python manage.py turnkey_trustline` (signed by Turnkey; `--check` only reports the wallet status).
 
 ## Architecture note: deviations from the proposal (SCF #44)
 
-The original proposal describes using the **SDF Anchor Platform** (Java/Kotlin service distributed as a Docker image) with **AWS KMS** for transaction signing. The current implementation differs in the respects documented below for SDF's awareness (points 1–3 since Tranche 1; point 4 added in Tranche 2).
+The original proposal describes using the **SDF Anchor Platform** (Java/Kotlin service distributed as a Docker image) with **AWS KMS** for transaction signing. The current implementation differs in the respects documented below for SDF's awareness (points 1–3 since Tranche 1; point 4 added in Tranche 2; point 2 rewritten in Tranche 3).
 
 **1. Anchor Platform → django-polaris.** We use [django-polaris](https://django-polaris.readthedocs.io/en/stable/), the Python reference implementation officially maintained by SDF, integrated directly into VERSO's Django backend, instead of the Anchor Platform service deployed as a standalone container. Both alternatives are official SDF solutions and implement the same SEPs with the same level of conformance. This choice avoids operating two services on different runtimes (Python and JVM) and consolidates the deployment into a single process. As a consequence, the repository does not include an application `Dockerfile` or an "Anchor Platform" container; `docker-compose.yml` in this repo is for **local development** (Postgres + Redis). In **production (Railway)** the database is **PostgreSQL** managed by Railway, linked to the web service via `DATABASE_URL`.
 
-**2. AWS KMS: not implemented.** Stellar transaction signing uses the Ed25519 scheme, an algorithm not supported by the AWS KMS `Sign` API (limited to RSA and ECDSA over NIST curves). Additionally, django-polaris does not expose an extension point to delegate signing to an external service: the signing seed is loaded into memory at process startup and used directly through `stellar_sdk`.
+**2. AWS KMS → Turnkey custody for the hot wallet (rewritten in Tranche 3).** The proposal described AWS KMS signing transactions. That is not viable: Stellar signs with **Ed25519**, which the AWS KMS `Sign` API does not support (it is limited to RSA and ECDSA over NIST curves). The hot wallet is instead held by **[Turnkey](https://www.turnkey.com)**, a key-management provider that supports Ed25519 natively and keeps private keys inside hardware-isolated secure enclaves (AWS Nitro). The hot wallet's private key was generated inside Turnkey and **never exists on VERSO infrastructure**.
 
-Consequently, `SIGNING_SEED` is currently managed as an environment variable on Railway, without an additional custody layer such as KMS or an HSM. This is a deliberate and temporary decision for this delivery: the environment is testnet, with no real funds at risk, and Railway encrypts environment variables at rest. Before operating on mainnet, this secret management will be migrated to a more robust custody scheme (for example AWS Secrets Manager with IAM-restricted access and CloudTrail auditing, and/or a custody provider with native Ed25519 support such as Turnkey or Fireblocks).
+*Correction to the Tranche 1/2 version of this note.* It stated that django-polaris "does not expose an extension point to delegate signing to an external service". That holds only for SEP-10 challenges. For on-chain payments Polaris provides [`CustodyIntegration`](https://django-polaris.readthedocs.io/en/stable/), its official interface for third-party custody providers, which is what this implementation uses.
+
+How it is wired:
+
+| Key | Where it lives | Signs | Funds |
+| --- | --- | --- | --- |
+| Hot wallet (`TURNKEY_SIGN_WITH`) | Inside Turnkey, never exported | USDC payouts (SEP-24 on-ramp) | Daily operating float only |
+| SEP-10 key (`SIGNING_SEED`) | Railway environment variable | SEP-10 challenges only (Polaris has no extension point there) | **None** on mainnet |
+| Cold wallet | Stellar multisig, dual approval (mainnet) | Treasury movements | Bulk of funds |
+
+- `verso_integrations/custody.py` — `VersoCustodyIntegration` builds each payout with the Turnkey wallet as source, requests the signature (`sign_raw_payload` over the transaction hash), **verifies it locally against the wallet's public key** before submitting, and saves the signed envelope first so that retries resubmit the same envelope (never a second payment). Payouts above `MAX_PAYOUT_USDC` are not signed and are left `blocked` for operator review.
+- `verso_integrations/turnkey_signer.py` — the Turnkey client. The backend authenticates as a **non-root service user** (root users bypass Turnkey policies), whose policy only allows signing with this wallet. Its API credentials are set **only on the `DEPOSITO` service**, the only one that pays; the other services know only the public address.
+- `verso_integrations/stellar_payout.py` (the T1 admin payout signed with `SIGNING_SEED`) was removed, leaving a single signing path for USDC payouts.
+
+What this changes versus a seed in an environment variable: the backend holds an API credential, not the key. It can be revoked and rotated in seconds without changing the wallet, it can only sign with this wallet, and every signature is recorded in Turnkey's activity log. **Known limit:** Turnkey's policy engine cannot parse Stellar transactions, so it cannot enforce amounts. Amount controls therefore rely on a low hot wallet balance, the cold wallet, the `MAX_PAYOUT_USDC` cap in VERSO's code, and the D3 reconciliation alarms (an unexpected outflow raises a discrepancy), which is the trigger to revoke the API key.
+
+**Verified on testnet (2026-10-13)** — Turnkey wallet [`GDNPLMIEFF7Z67W4XW2F3NPM7Z6IN5YOOH43WMYJR2LIXDGFJZ2KFF5S`](https://stellar.expert/explorer/testnet/account/GDNPLMIEFF7Z67W4XW2F3NPM7Z6IN5YOOH43WMYJR2LIXDGFJZ2KFF5S):
+
+| Step | Transaction | Ledger | Result |
+| --- | --- | --- | --- |
+| USDC trustline signed by Turnkey | [`7739aae5…`](https://stellar.expert/explorer/testnet/tx/7739aae56f9d79b68f35f2a0a0390922fa36b1dbe0e0d5826934c3cbfb7deb17) | 5164135 | Successful, 1 signature (Turnkey) |
+| SEP-24 off-ramp: client sends 3 USDC to the Turnkey wallet | [`3c3d3ecc…`](https://stellar.expert/explorer/testnet/tx/3c3d3eccbc8f29bc907f3100329a4d825e5150cbc20155a22ec7533fd4f09b3e) | 5179275 | Detected by `RETIRO`, matched by reconciliation |
+| SEP-24 on-ramp: anchor pays 1.4084507 USDC, **signed by Turnkey** | [`d7146a98…`](https://stellar.expert/explorer/testnet/tx/d7146a98f4b52e0ee667091ffe0ebdd5c3cf4e1ab8562b181af09bd85e3f8319) | 5179303 | Signature verifies against `GDNP…FF5S`, not against the `SIGNING_SEED` account |
+
+D3 reconciliation was re-bootstrapped on the Turnkey wallet (opening balance 20 USDC) and tracked both movements with on-chain and internal balances equal (delta 0), 0 discrepancies and 0 unmatched movements. The T2 observation window on the previous hot wallet was exported before the switch: [`docs/evidence/t2/d3_reconciliation_report_pre_turnkey/`](docs/evidence/t2/d3_reconciliation_report_pre_turnkey/) (14 days, 20,068 runs, 100% OK, 0 discrepancies). Between the last run on the previous wallet and the first on the Turnkey wallet there is a ~19-minute gap without runs: the worker refused to start until the new observation window was bootstrapped. Automated coverage: `test_custody.py` (signing, payout cap, Turnkey outages and refusals, retries without double payment).
 
 **3. KYC verification: moved from SEP-10 (T1) to the SEP-24 webview (T2).** The original internal proposal called for verifying the client's KYC status and issuing the JWT conditionally inside the SEP-10 authentication endpoint itself. This approach is corrected because it is inconsistent with the protocol's separation of concerns: SEP-10 exclusively certifies ownership of the Stellar account (signature verification) and must not depend on, nor expose, the client's compliance status. The SEP-10 endpoint in T1 issues the JWT solely on the basis of cryptographic signature verification, per the standard.
 
