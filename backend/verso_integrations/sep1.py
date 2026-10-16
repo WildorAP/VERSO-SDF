@@ -89,7 +89,7 @@ def return_toml_contents(request, *args, **kwargs):
                 "VERSO es un settlment layer para STABLECOIN en moneda local peruana PEN/USD"
             ),
             "ORG_OFFICIAL_EMAIL": "tecnologia@versotek.io",
-            "ORG_SUPPORT_EMAIL": "operaciones@versotek.io ",
+            "ORG_SUPPORT_EMAIL": "operaciones@versotek.io",
             "ORG_PHYSICAL_ADDRESS": "Lima, Peru",
             "ORG_PHONE_NUMBER": "+51 963597658",
         },
