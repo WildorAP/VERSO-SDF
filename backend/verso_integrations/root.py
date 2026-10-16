@@ -114,15 +114,15 @@ def build_root_payload() -> dict:
             {
                 "id": "T1",
                 "seps": ["SEP-1", "SEP-10"],
-                "status": "live",
-                "status_label": "En testnet",
-                "scope": "stellar.toml, wallet auth, depósito simulado (admin)",
+                "status": "done",
+                "status_label": "Completado",
+                "scope": "stellar.toml y autenticación de wallet",
             },
             {
                 "id": "T2",
                 "seps": ["SEP-24", "SEP-38"],
-                "status": "in_progress",
-                "status_label": "En testnet (cierre de entregables)",
+                "status": "done",
+                "status_label": "Completado",
                 "scope": (
                     "SEP-24 depósito PEN/USD→USDC y retiro USDC→PEN/USD vía CCI/CCE, con login VERSO y KYC; "
                     "SEP-38 cotizaciones en vivo; conciliación on-chain de USDC (Stellar RPC)"
@@ -131,9 +131,9 @@ def build_root_payload() -> dict:
             {
                 "id": "T3",
                 "seps": ["Mainnet"],
-                "status": "planned",
-                "status_label": "Planificado",
-                "scope": "producción mainnet",
+                "status": "in_progress",
+                "status_label": "En curso",
+                "scope": "operación en mainnet con USDC real, custodia Turnkey y liquidación CCI/CCE",
             },
         ],
         "endpoints": endpoints,

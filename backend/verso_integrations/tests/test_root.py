@@ -29,8 +29,9 @@ class RootViewTests(TestCase):
         self.assertEqual(data["network"], "testnet")
         self.assertEqual(len(data["tranches"]), 3)
         self.assertEqual(data["tranches"][0]["id"], "T1")
-        self.assertEqual(data["tranches"][0]["status"], "live")
-        self.assertEqual(data["tranches"][1]["status"], "in_progress")
+        self.assertEqual(data["tranches"][0]["status"], "done")
+        self.assertEqual(data["tranches"][1]["status"], "done")
+        self.assertEqual(data["tranches"][2]["status"], "in_progress")
         self.assertEqual(len(data["endpoints"]), 3)
 
     @patch.dict("os.environ", {"ACTIVE_SEPS": "sep-1,sep-10,sep-38", "HOST_URL": "http://localhost:8000"})
