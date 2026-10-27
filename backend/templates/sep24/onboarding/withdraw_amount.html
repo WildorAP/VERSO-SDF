@@ -74,10 +74,11 @@
                 <span class="quote-panel__label">Recibirás</span>
                 <strong class="quote-panel__value" id="quote-receive-fiat">{{ fiat_symbol }} —</strong>
             </div>
+            <p class="field-error" id="quote-min-warning" role="alert" hidden></p>
             <p class="quote-panel__note">Cotización referencial con el tipo de cambio vigente.</p>
         </div>
 
-        <button type="submit" class="btn">Continuar</button>
+        <button type="submit" class="btn" id="quote-submit">Continuar</button>
     </form>
 {% endblock %}
 

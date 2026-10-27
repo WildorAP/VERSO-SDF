@@ -16,7 +16,7 @@ from verso_integrations.polaris_setup import (
 )
 from verso_integrations.rails import VersoRailsIntegration
 from verso_integrations.rates import FiatUsdcRate
-from verso_integrations.sep24.forms import PayoutBankForm, UsdcWithdrawForm
+from verso_integrations.sep24.forms import ChangeAmountForm, PayoutBankForm, UsdcWithdrawForm
 from verso_integrations.sep24.withdraw_integration import VersoWithdrawIntegration
 from verso_integrations.withdraw import compute_amount_fiat
 
@@ -84,6 +84,34 @@ class VersoWithdrawIntegrationTests(TestCase):
 
         next_form = self.integration.form_for_transaction(self.request, self.transaction)
         self.assertIsInstance(next_form, PayoutBankForm)
+
+    @patch("verso_integrations.sep24.fiat.get_pen_usdc_rate")
+    def test_change_amount_returns_to_usdc_form_before_payout(self, mock_rate):
+        mock_rate.return_value = FiatUsdcRate(
+            rate_venta=Decimal("3.7500"), rate_compra=Decimal("3.7000")
+        )
+        self.request.session = {}
+        form = UsdcWithdrawForm({"amount_usdc": "12.5000000"}, fiat_currency="PEN")
+        self.assertTrue(form.is_valid())
+        self.integration.after_form_validation(self.request, form, self.transaction)
+        self.transaction.refresh_from_db()
+        quote_id = self.transaction.quote_id
+
+        back_form = self.integration.form_for_transaction(
+            self.request, self.transaction, post_data={"change_amount": "1"}
+        )
+        self.assertIsInstance(back_form, ChangeAmountForm)
+        self.assertTrue(back_form.is_valid())
+        self.integration.after_form_validation(self.request, back_form, self.transaction)
+
+        self.transaction.refresh_from_db()
+        self.assertFalse(Sep24WithdrawMeta.objects.filter(transaction=self.transaction).exists())
+        self.assertFalse(Quote.objects.filter(pk=quote_id).exists())
+        self.assertIsNone(self.transaction.amount_in)
+
+        amount_form = self.integration.form_for_transaction(self.request, self.transaction)
+        self.assertIsInstance(amount_form, UsdcWithdrawForm)
+        self.assertEqual(amount_form.initial["amount_usdc"], Decimal("12.5000000"))
 
     @patch("verso_integrations.sep24.fiat.get_usd_usdc_rate")
     def test_usd_withdraw_uses_usd_rate(self, mock_rate):

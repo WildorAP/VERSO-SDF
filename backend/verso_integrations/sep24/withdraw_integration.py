@@ -22,8 +22,13 @@ from verso_integrations.models import Sep24WithdrawMeta
 from verso_integrations.polaris_setup import usdc_asset_identification
 from verso_integrations.rates import RatesError
 from verso_integrations.root import stellar_expert_tx_url
+from verso_integrations.sep24.change_amount import (
+    get_previous_amount,
+    reset_to_amount_step,
+    wants_change_amount,
+)
 from verso_integrations.sep24.fiat import fiat_config
-from verso_integrations.sep24.forms import PayoutBankForm, UsdcWithdrawForm
+from verso_integrations.sep24.forms import ChangeAmountForm, PayoutBankForm, UsdcWithdrawForm
 from verso_integrations.sep24.kyc_gate import (
     lookup_client_kyc,
     onboarding_step,
@@ -192,6 +197,8 @@ class VersoWithdrawIntegration(WithdrawalIntegration):
         if meta is not None:
             if meta.payout_confirmed_at:
                 return None
+            if wants_change_amount(post_data):
+                return ChangeAmountForm(post_data)
             if post_data is not None:
                 return PayoutBankForm(post_data)
             return PayoutBankForm()
@@ -208,7 +215,10 @@ class VersoWithdrawIntegration(WithdrawalIntegration):
 
         currency = get_withdraw_fiat_currency(request, transaction.id)
         initial = {}
-        if amount is not None:
+        previous_amount = get_previous_amount(request, transaction.id)
+        if previous_amount is not None:
+            initial["amount_usdc"] = previous_amount
+        elif amount is not None:
             initial["amount_usdc"] = amount
         if post_data is not None:
             return UsdcWithdrawForm(post_data, fiat_currency=currency)
@@ -226,6 +236,10 @@ class VersoWithdrawIntegration(WithdrawalIntegration):
             return
         if isinstance(form, UsdcWithdrawForm):
             self._handle_usdc_withdraw(request, form, transaction)
+            return
+        if isinstance(form, ChangeAmountForm):
+            meta = Sep24WithdrawMeta.objects.get(transaction=transaction)
+            reset_to_amount_step(request, transaction, meta, meta.amount_usdc)
             return
         if isinstance(form, PayoutBankForm):
             self._handle_payout_bank(request, form, transaction)

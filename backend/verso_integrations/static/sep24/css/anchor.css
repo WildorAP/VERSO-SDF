@@ -458,6 +458,12 @@ textarea.mono:focus {
   opacity: 0.9;
 }
 
+.btn:disabled,
+.btn:disabled:hover {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .btn:focus-visible,
 a:focus-visible,
 input:focus-visible {
@@ -469,6 +475,10 @@ input:focus-visible {
   background: transparent;
   border: 1px solid var(--line);
   color: var(--text);
+}
+
+.change-amount-form {
+  margin-top: 0.75rem;
 }
 
 .btn--inline {

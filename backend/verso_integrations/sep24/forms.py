@@ -106,6 +106,12 @@ class TransferAlreadyDeclaredForm(forms.Form):
     acknowledge = forms.CharField(required=False, widget=forms.HiddenInput)
 
 
+class ChangeAmountForm(forms.Form):
+    """Go back from the frozen quote to the amount step (before any money moves)."""
+
+    change_amount = forms.CharField(widget=forms.HiddenInput)
+
+
 class UsdcWithdrawForm(forms.Form):
     """Collect USDC amount for off-ramp (USDC → PEN or USD)."""
 

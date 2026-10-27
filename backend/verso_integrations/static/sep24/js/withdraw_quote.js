@@ -7,6 +7,8 @@
   var input = document.getElementById("id_amount_usdc");
   var sendEl = document.getElementById("quote-send-usdc");
   var receiveEl = document.getElementById("quote-receive-fiat");
+  var minWarningEl = document.getElementById("quote-min-warning");
+  var submitEl = document.getElementById("quote-submit");
   if (!input || !sendEl || !receiveEl) {
     return;
   }
@@ -51,19 +53,40 @@
     );
   }
 
+  function formatMinUsdc(value) {
+    return (
+      value.toLocaleString("es-PE", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 7,
+      }) + " USDC"
+    );
+  }
+
   function resetQuote() {
     sendEl.textContent = "— USDC";
     receiveEl.textContent = fiatSymbol + " —";
   }
 
+  function setBelowMinimum(belowMinimum) {
+    if (minWarningEl) {
+      minWarningEl.textContent = "Monto mínimo: " + formatMinUsdc(minUsdc);
+      minWarningEl.hidden = !belowMinimum;
+    }
+    if (submitEl) {
+      submitEl.disabled = belowMinimum;
+    }
+  }
+
   function updateQuote() {
     var amount = parseAmount(input.value);
-    if (amount === null || amount < minUsdc) {
+    if (amount === null) {
       resetQuote();
+      setBelowMinimum(false);
       return;
     }
     sendEl.textContent = formatUsdc(amount);
     receiveEl.textContent = formatFiat(amount * rateCompra);
+    setBelowMinimum(amount < minUsdc);
   }
 
   input.addEventListener("input", updateQuote);

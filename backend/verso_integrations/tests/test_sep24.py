@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, patch
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
+from django.utils import timezone
 from polaris.models import Asset, DeliveryMethod, Quote, Transaction
 from polaris.templates import Template
 from stellar_sdk import Keypair
@@ -17,7 +18,12 @@ from verso_integrations.polaris_setup import (
 )
 from verso_integrations.rails import VersoRailsIntegration
 from verso_integrations.rates import FiatUsdcRate
-from verso_integrations.sep24.forms import BankTransferReceiptForm, FiatDepositForm, PenDepositForm
+from verso_integrations.sep24.forms import (
+    BankTransferReceiptForm,
+    ChangeAmountForm,
+    FiatDepositForm,
+    PenDepositForm,
+)
 from verso_integrations.sep24.integration import VersoDepositIntegration
 from verso_integrations.sep24.onboarding_forms import VersoLoginForm, VersoRegisterForm
 
@@ -136,6 +142,51 @@ class VersoDepositIntegrationTests(TestCase):
             self.transaction.status,
             Transaction.STATUS.pending_user_transfer_start,
         )
+
+    @patch("verso_integrations.sep24.fiat.get_pen_usdc_rate")
+    def test_change_amount_discards_quote_and_returns_to_amount_step(self, mock_rate):
+        mock_rate.return_value = FiatUsdcRate(
+            rate_venta=Decimal("3.7500"), rate_compra=Decimal("3.7000")
+        )
+        self.request.session = {}
+        form = FiatDepositForm({"amount_fiat": "100.00"}, fiat_currency="PEN")
+        self.assertTrue(form.is_valid())
+        self.integration.after_form_validation(self.request, form, self.transaction)
+        self.transaction.refresh_from_db()
+        quote_id = self.transaction.quote_id
+
+        back_form = self.integration.form_for_transaction(
+            self.request, self.transaction, post_data={"change_amount": "1"}
+        )
+        self.assertIsInstance(back_form, ChangeAmountForm)
+        self.assertTrue(back_form.is_valid())
+        self.integration.after_form_validation(self.request, back_form, self.transaction)
+
+        self.transaction.refresh_from_db()
+        self.assertFalse(Sep24DepositMeta.objects.filter(transaction=self.transaction).exists())
+        self.assertFalse(Quote.objects.filter(pk=quote_id).exists())
+        self.assertIsNone(self.transaction.quote_id)
+        self.assertIsNone(self.transaction.amount_in)
+        self.assertEqual(self.transaction.status, Transaction.STATUS.incomplete)
+
+        amount_form = self.integration.form_for_transaction(self.request, self.transaction)
+        self.assertIsInstance(amount_form, FiatDepositForm)
+        self.assertEqual(amount_form.initial["amount_fiat"], Decimal("100.00"))
+
+    def test_change_amount_ignored_after_transfer_declared(self):
+        Sep24DepositMeta.objects.create(
+            transaction=self.transaction,
+            amount_pen=Decimal("100.00"),
+            tipo_cambio=Decimal("3.7500"),
+            amount_usdc=Decimal("26.6666667"),
+            sell_asset=pen_asset_identification(),
+            buy_asset=usdc_asset_identification(),
+            transfer_declared_at=timezone.now(),
+        )
+        form = self.integration.form_for_transaction(
+            self.request, self.transaction, post_data={"change_amount": "1"}
+        )
+        self.assertNotIsInstance(form, ChangeAmountForm)
 
     @patch("verso_integrations.sep24.fiat.get_pen_usdc_rate")
     def test_content_for_template_more_info_includes_bank_guidance(self, mock_rate):

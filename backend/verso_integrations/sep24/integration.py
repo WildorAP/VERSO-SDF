@@ -23,10 +23,16 @@ from verso_integrations.models import Sep24DepositMeta
 from verso_integrations.polaris_setup import FIAT_SIGNIFICANT_DECIMALS, usdc_asset_identification
 from verso_integrations.rates import RatesError
 from verso_integrations.root import stellar_expert_tx_url
+from verso_integrations.sep24.change_amount import (
+    get_previous_amount,
+    reset_to_amount_step,
+    wants_change_amount,
+)
 from verso_integrations.sep24.fiat import fiat_config
 from verso_integrations.sep24.transaction_views import TERMINAL_TRANSACTION_STATUSES
 from verso_integrations.sep24.forms import (
     BankTransferReceiptForm,
+    ChangeAmountForm,
     FiatDepositForm,
     PenDepositForm,
     TransferAlreadyDeclaredForm,
@@ -219,7 +225,10 @@ class VersoDepositIntegration(DepositIntegration):
         if step == "deposit":
             currency = get_deposit_fiat_currency(request, transaction.id) if request and transaction else "PEN"
             initial = {}
-            if amount is not None:
+            previous_amount = get_previous_amount(request, transaction.id) if transaction else None
+            if previous_amount is not None:
+                initial["amount_fiat"] = previous_amount
+            elif amount is not None:
                 initial["amount_fiat"] = amount
             if post_data is not None:
                 return FiatDepositForm(post_data, fiat_currency=currency)
@@ -248,6 +257,8 @@ class VersoDepositIntegration(DepositIntegration):
                 if post_data is not None:
                     return TransferAlreadyDeclaredForm(post_data)
                 return None
+            if wants_change_amount(post_data):
+                return ChangeAmountForm(post_data)
             if post_data is not None:
                 return BankTransferReceiptForm(post_data, request.FILES if request else None)
             return BankTransferReceiptForm()
@@ -301,6 +312,10 @@ class VersoDepositIntegration(DepositIntegration):
             return
         if isinstance(form, BankTransferReceiptForm):
             self._handle_bank_transfer_confirmation(request, form, transaction)
+            return
+        if isinstance(form, ChangeAmountForm):
+            meta = Sep24DepositMeta.objects.get(transaction=transaction)
+            reset_to_amount_step(request, transaction, meta, meta.amount_pen)
             return
         if isinstance(form, TransferAlreadyDeclaredForm):
             return

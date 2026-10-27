@@ -85,6 +85,11 @@
             Al confirmar, revisaremos tu depósito y te enviaremos el USDC a tu wallet.
         </p>
     </form>
+    <form method="post" action="{{ post_url }}" class="change-amount-form">
+        {% csrf_token %}
+        <input type="hidden" name="change_amount" value="1">
+        <button type="submit" class="btn btn--ghost">← Cambiar monto</button>
+    </form>
 {% endblock %}
 
 {% block extra_scripts %}

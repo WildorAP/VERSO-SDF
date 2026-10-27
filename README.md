@@ -4,15 +4,15 @@ VERSO's Stellar anchor (PSAV Peru) implemented with **Django + Polaris**.
 
 Repository kept separate from the VERSO core (`BASE_DE_CLIENTES`, [versotek.io](https://versotek.io)).
 
-**Production (testnet):** https://anchor.versotek.io
+**Production (mainnet):** https://anchor.versotek.io · **Testnet:** https://verso-sdf-testnet.up.railway.app
 
 ## Roadmap
 
 | Tranche | SEPs           | Status                                                                                                                                                                                                                                   |
 | ------- | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **T1**  | SEP-1, SEP-10  | Complete on testnet (`anchor.versotek.io`) — 3 deliverables verified, see details below                                                                                                                                                  |
-| **T2**  | SEP-24, SEP-38 | **In testnet** — SEP-24 on-ramp + off-ramp webview (VERSO login, KYC gate), SEP-38 quotes, D3 USDC reconciliation. **Workers on Railway** (DEPOSITO, RETIRO, RECONCILIATION). **Evidence:** [`docs/T2_EVIDENCE.md`](docs/T2_EVIDENCE.md) |
-| **T3**  | Mainnet        | **In progress** — hot wallet custody migrated to Turnkey and verified on testnet (see deviation 2). Mainnet launch pending |
+| **T1**  | SEP-1, SEP-10  | **Complete** on testnet — 3 deliverables verified, see details below                                                                                                                                                                     |
+| **T2**  | SEP-24, SEP-38 | **Complete** on testnet — SEP-24 on-ramp + off-ramp webview (VERSO login, KYC gate), SEP-38 quotes, D3 USDC reconciliation. **Workers on Railway** (DEPOSITO, RETIRO, RECONCILIATION). **Evidence:** [`docs/T2_EVIDENCE.md`](docs/T2_EVIDENCE.md) |
+| **T3**  | Mainnet        | **In progress** — anchor **live on mainnet since 2026-10-16** (SEP-1/10/24/38), hot wallet custody with Turnkey (see deviation 2), D3 reconciliation running on mainnet. 30 real client operations on-chain (27 on-ramp + 3 off-ramp) as of 2026-10-27. See [Tranche 3](#deliverable-status--tranche-3-scf-44) |
 
 ## Deliverable status — Tranche 1 (SCF #44)
 
@@ -196,7 +196,7 @@ Full evidence (transaction ids, Stellar hashes, quote ids, CloudWatch and admin 
 | D3 reconciliation worker (RPC sync + balance check + CloudWatch)          | Done (Railway worker **RECONCILIATION**) |
 | CI: Postgres + Redis, 182 tests                                           | Done                                     |
 
-**Fiat settlement:** PEN/USD receipt (on-ramp) and payout (off-ramp) are confirmed manually by VERSO operations in the admin (**Mark PEN received** / **Mark fiat sent**). Deposit, withdrawal and reconciliation **workers run on Railway** (see **Production (testnet)** below).
+**Fiat settlement:** PEN/USD receipt (on-ramp) and payout (off-ramp) are confirmed manually by VERSO operations in the admin (**Mark PEN received** / **Mark fiat sent**). Deposit, withdrawal and reconciliation **workers run on Railway** (see **Production environments** below).
 
 #### Architecture: Django + Polaris (continuation of the T1 decision)
 
@@ -207,7 +207,7 @@ Tranche 2 keeps the stack chosen in Tranche 1: **django-polaris integrated into 
 | Anchor Platform SEP-24 server + VERSO backend callbacks         | Polaris SEP-24 endpoints (`/sep24/...`) + VERSO integration classes: `VersoDepositIntegration` (`sep24/integration.py`), `VersoWithdrawIntegration` (`sep24/withdraw_integration.py`), `VersoRailsIntegration` (`rails.py`), registered in `apps.py` |
 | Anchor Platform SEP-38 endpoint calling VERSO `/callbacks/rate` | Polaris SEP-38 endpoints (`/sep38/info`, `/price`, `/prices`, `/quote`) + `VersoQuoteIntegration` (`sep38.py`), which fetches the live rate from VERSO Core `GET /internal/rates/pen-usdc/` (`rates.py`) on every request                            |
 | SEP-24 interactive webview in React 18 + Vite + TypeScript      | Django templates + vanilla JS (`templates/sep24/onboarding/`, `static/sep24/`), served by the same backend under VERSO branding                                                                                                                      |
-| Anchor Platform event/status handling                           | Polaris workers on Railway: `process_pending_deposits` (DEPOSITO), `watch_transactions` (RETIRO) — see **Production (testnet)**                                                                                                                        |
+| Anchor Platform event/status handling                           | Polaris workers on Railway: `process_pending_deposits` (DEPOSITO), `watch_transactions` (RETIRO) — see **Production environments**                                                                                                                        |
 
 ### Deliverable 1 — SEP-24: on-ramp and off-ramp on testnet
 
@@ -328,17 +328,46 @@ The worker publishes metrics every ~60 s to CloudWatch; four alarms notify the o
 
 Tested on 2026-09-29 with a synthetic critical discrepancy: OK → ALARM → OK, with SNS emails (`docs/T2_EVIDENCE.md` → Deliverable 3).
 
-## Production (testnet)
+## Deliverable status — Tranche 3 (SCF #44)
 
-| Check                   | URL                                                        |
-| ----------------------- | ---------------------------------------------------------- |
-| Health / landing        | https://anchor.versotek.io/ (HTML; JSON at `?format=json`) |
-| stellar.toml (SEP-1)    | https://anchor.versotek.io/.well-known/stellar.toml        |
-| SEP-10 auth (challenge) | https://anchor.versotek.io/auth?account=G...               |
-| SEP-24 info             | https://anchor.versotek.io/sep24/info                      |
-| SEP-38 info             | https://anchor.versotek.io/sep38/info                      |
+Mainnet launch: VERSO Anchor live on Stellar mainnet with real PEN/USD ↔ USDC settlement through CCI/CCE.
 
-Deployed on **Railway** from `main` with **PostgreSQL** and **Redis**. The web service (VERSO-SDF) serves the SEP APIs, admin and webview; long-running loops run as separate services:
+| #   | Deliverable                                   | Status                                                                                                                       |
+| --- | --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Mainnet launch SEP-1/10/24/38                 | **In progress** — live on mainnet since 2026-10-16; hot wallet with USDC trustline (Turnkey custody); SEP-1 5/5 and SEP-10 14/17 in the SDF anchor test suite |
+| 2   | CCI/CCE Phase 2 semi-automated settlement     | **In progress** — 30 real client operations on-chain (27 on-ramp + 3 off-ramp, 9 accounts); transfers from 3 Peruvian banks (BCP, Alfin Banco, Interbank); [operator runbook](docs/RUNBOOK.md); settlement-time report pending |
+| 3   | Operational proof + Stellar Anchor Directory  | **In progress** — 30 real on/off-ramp operations verifiable on [Stellar Expert](https://stellar.expert/explorer/public/account/GCYWYXFOWGOXOLUI6ZXBSMMRRK4KJUUVHBBSPMM6XAEOAX2YU5KZNJMM); reconciliation and alarms running on mainnet; Directory: see report |
+| 4   | Hardening + audit preparation                 | **In progress** — Turnkey custody with on-chain evidence (deviation 2) and `test_custody.py`; edge-case CI suite pending      |
+| 5   | Public technical documentation                | **In progress** — [implementation guide](docs/IMPLEMENTATION_GUIDE.md), [mainnet architecture](docs/ARCHITECTURE.md), [callback reference](docs/CALLBACKS.md) and [operator runbook](docs/RUNBOOK.md) |
+
+### Mainnet deployment (2026-10-16)
+
+| Item                         | Value                                                                                                                                                                                                 |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Home domain                  | `anchor.versotek.io` — [`stellar.toml`](https://anchor.versotek.io/.well-known/stellar.toml) with `NETWORK_PASSPHRASE = "Public Global Stellar Network ; September 2015"`                              |
+| Asset                        | USDC (Circle) `GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN`, `status = "live"`                                                                                                             |
+| Hot wallet (Turnkey)         | [`GCYWYXFOWGOXOLUI6ZXBSMMRRK4KJUUVHBBSPMM6XAEOAX2YU5KZNJMM`](https://stellar.expert/explorer/public/account/GCYWYXFOWGOXOLUI6ZXBSMMRRK4KJUUVHBBSPMM6XAEOAX2YU5KZNJMM) — separate service user and policy from testnet |
+| USDC trustline               | Signed by Turnkey: [`8d7e05e2…`](https://stellar.expert/explorer/public/tx/8d7e05e29ae29be7f987b7870e9fc909815a8cc0a8fe869e53b69681c9af1643)                                                              |
+| SEP-10 signing key           | `GBXCGFP2DX7V7LHMIQACZ6CWV6C6JVU54CQV6GXSIV7B656ZW2T53WIO` — new mainnet key, **holds no funds**                                                                                                       |
+| Database                     | New PostgreSQL for mainnet, no testnet data carried over                                                                                                                                              |
+| D3 reconciliation            | Running on mainnet (Stellar RPC); every run OK, delta 0, 0 discrepancies; 4 CloudWatch alarms on `Environment=mainnet`                                                                                 |
+| Settlement account           | CCI/CCE at VERSO's operating bank (separate PEN and USD accounts), shown to the client in the SEP-24 deposit instructions                                                                              |
+
+**SDF anchor test suite** (`@stellar/anchor-tests`) against `anchor.versotek.io` on mainnet: **SEP-1 5/5** and **SEP-10 14/17**. The 3 SEP-10 tests not passing on mainnet are the *Account Signer Support* group: they create and configure funded test accounts, which the suite can only do on testnet. The same 3 tests pass against the testnet deployment.
+
+**Deployment policy.** Testnet and mainnet are two Railway environments of the same repository; they differ only in environment variables and database. Testnet deploys automatically from `main`; mainnet auto-deploy is **off** and each release is deployed manually after it has been validated on testnet.
+
+## Production environments
+
+| Check                   | Mainnet                                                    | Testnet                                                        |
+| ----------------------- | ---------------------------------------------------------- | -------------------------------------------------------------- |
+| Health / landing        | https://anchor.versotek.io/ (HTML; JSON at `?format=json`) | https://verso-sdf-testnet.up.railway.app/                      |
+| stellar.toml (SEP-1)    | https://anchor.versotek.io/.well-known/stellar.toml        | https://verso-sdf-testnet.up.railway.app/.well-known/stellar.toml |
+| SEP-10 auth (challenge) | https://anchor.versotek.io/auth?account=G...               | https://verso-sdf-testnet.up.railway.app/auth?account=G...     |
+| SEP-24 info             | https://anchor.versotek.io/sep24/info                      | https://verso-sdf-testnet.up.railway.app/sep24/info            |
+| SEP-38 info             | https://anchor.versotek.io/sep38/info                      | https://verso-sdf-testnet.up.railway.app/sep38/info            |
+
+Deployed on **Railway** (one environment per network, each with its own **PostgreSQL** and **Redis**). The web service (VERSO-SDF) serves the SEP APIs, admin and webview; long-running loops run as separate services:
 
 | Railway service    | Role                                                       | Command                                          |
 | ------------------ | ---------------------------------------------------------- | ------------------------------------------------ |
@@ -347,7 +376,7 @@ Deployed on **Railway** from `main` with **PostgreSQL** and **Redis**. The web s
 | **RETIRO**         | SEP-24 off-ramp: detect inbound USDC                        | `watch_transactions`                             |
 | **RECONCILIATION** | D3: RPC event ingest + balance reconciliation + CloudWatch | `reconciliation_worker --loop`                   |
 
-**No mocks in production.** Test shortcuts must be off so testnet transactions exercise the real flow (manual fiat confirmation, real KYC from VERSO Core, on-chain USDC):
+**No mocks in production.** Test shortcuts are off on both testnet and mainnet, so every transaction exercises the real flow (manual fiat confirmation, real KYC from VERSO Core, on-chain USDC):
 
 | Variable                                    | Production value            | Effect                                                                  |
 | ------------------------------------------- | --------------------------- | ----------------------------------------------------------------------- |
@@ -386,21 +415,26 @@ Moving from testnet to mainnet is **not** a single variable. django-polaris read
 
 `HORIZON_URI` is **not** defined in `backend/config/settings.py`; Polaris loads it from the environment via `env_or_settings("HORIZON_URI")`. It must appear in Railway Shared Variables and in `.env.example` documentation.
 
-| Variable                                            | Testnet (today)                             | Mainnet (T3)                                          |
-| --------------------------------------------------- | ------------------------------------------- | ----------------------------------------------------- |
-| `STELLAR_NETWORK_PASSPHRASE`                        | `Test SDF Network ; September 2015`         | `Public Global Stellar Network ; September 2015`      |
-| **`HORIZON_URI`**                                   | `https://horizon-testnet.stellar.org`       | **`https://horizon.stellar.org`**                     |
-| `STELLAR_RPC_URL` (D3 reconciliation)               | `https://soroban-testnet.stellar.org`       | Mainnet Soroban RPC URL (**required**; no default)    |
-| `SIGNING_SEED`                                      | SEP-10 signing key                          | **New mainnet seed**, SEP-10 only — **holds no funds** |
-| `TURNKEY_SIGN_WITH` (all services)                  | Turnkey testnet wallet `GDNP…FF5S`          | New Turnkey **mainnet** wallet (separate service user) |
-| `TURNKEY_ORGANIZATION_ID` / `TURNKEY_API_*` (DEPOSITO only) | Testnet service user `verso-anchor` | Mainnet service user API key                          |
-| `RECON_ENV`                                         | `testnet`                                   | `mainnet` (CloudWatch dimension)                      |
-| `HOST_URL` / `ALLOWED_HOSTS` / `SEP10_HOME_DOMAINS` | Production testnet domain                   | Production mainnet domain                             |
-| Polaris assets                                      | `seed_polaris_t2` (testnet USDC issuer)     | Re-seed or migrate assets for mainnet issuer          |
-| `VERSO_CCI_*` / `VERSO_USD_CCI_*`                   | Test CCI details                            | CCI of VERSO's operating bank account (PEN / USD)     |
-| `LOCAL_MODE`, `VERSO_MOCK_*`                        | Test helpers may be enabled                 | `LOCAL_MODE=0`; every `VERSO_MOCK_*` empty or `0`     |
+Applied on 2026-10-16 (see [Tranche 3](#deliverable-status--tranche-3-scf-44)):
 
-Apply the same values on **VERSO-SDF**, **DEPOSITO**, **RETIRO**, and **RECONCILIATION** (all workers use Polaris and/or RPC). After mainnet cutover, run `reconciliation_bootstrap --force` on a fresh observation window (D3). The reconciliation worker refuses to start when the configured hot wallet differs from the one stored at bootstrap (`SyncState hot_wallet mismatch`), so run the bootstrap from another service sharing the database (e.g. `VERSO-SDF`) and export `reconciliation_report` first: `--force` resets the ledger entries.
+| Variable                                            | Testnet                                     | Mainnet                                                |
+| --------------------------------------------------- | ------------------------------------------- | ------------------------------------------------------ |
+| `STELLAR_NETWORK_PASSPHRASE`                        | `Test SDF Network ; September 2015`         | `Public Global Stellar Network ; September 2015`       |
+| **`HORIZON_URI`**                                   | `https://horizon-testnet.stellar.org`       | **`https://horizon.stellar.org`**                      |
+| `STELLAR_RPC_URL` (D3 reconciliation)               | `https://soroban-testnet.stellar.org`       | Ecosystem RPC provider (**required**; SDF runs no public mainnet RPC) |
+| `SIGNING_SEED`                                      | Testnet SEP-10 key                          | **New mainnet key**, SEP-10 only — **holds no funds**  |
+| `DJANGO_SECRET_KEY` / `SERVER_JWT_KEY`              | Testnet values                              | **New values**, never shared with testnet              |
+| `TURNKEY_SIGN_WITH` (all services)                  | Turnkey testnet wallet `GDNP…FF5S`          | Turnkey **mainnet** wallet `GCYW…NJMM`                 |
+| `TURNKEY_ORGANIZATION_ID` / `TURNKEY_API_*` (DEPOSITO only) | Testnet service user                | Separate mainnet service user                          |
+| `RECON_ENV`                                         | `testnet`                                   | `mainnet` (CloudWatch dimension)                       |
+| `HOST_URL` / `ALLOWED_HOSTS` / `CSRF_TRUSTED_ORIGINS` / `SEP10_HOME_DOMAINS` | `verso-sdf-testnet.up.railway.app` | `anchor.versotek.io`                   |
+| Polaris assets                                      | `seed_polaris_t2`                           | `seed_polaris_t2` (the USDC issuer follows the network passphrase) |
+| `VERSO_CCI_*` / `VERSO_USD_CCI_*`                   | Test CCI details                            | CCI of VERSO's operating bank account (PEN / USD)      |
+| `LOCAL_MODE`, `VERSO_MOCK_*`                        | Test helpers may be enabled                 | `LOCAL_MODE=0`; every `VERSO_MOCK_*` empty or `0`      |
+
+Apply the same values on **VERSO-SDF**, **DEPOSITO**, **RETIRO**, and **RECONCILIATION** (all workers use Polaris and/or RPC); AWS credentials and `RECON_SNS_TOPIC_ARN` go only on RECONCILIATION. On a new mainnet database, run `seed_polaris_t2` and `reconciliation_bootstrap` once, then restart RECONCILIATION (it exits until the bootstrap exists) and run `setup_cloudwatch_alarms` from it.
+
+If the hot wallet changes on an existing database, use `reconciliation_bootstrap --force` instead. The reconciliation worker refuses to start when the configured hot wallet differs from the one stored at bootstrap (`SyncState hot_wallet mismatch`), so run the bootstrap from another service sharing the database (e.g. `VERSO-SDF`) and export `reconciliation_report` first: `--force` resets the ledger entries.
 
 The mainnet hot wallet's USDC trustline is created with `python manage.py turnkey_trustline` (signed by Turnkey; `--check` only reports the wallet status).
 
@@ -420,13 +454,13 @@ How it is wired:
 | --- | --- | --- | --- |
 | Hot wallet (`TURNKEY_SIGN_WITH`) | Inside Turnkey, never exported | USDC payouts (SEP-24 on-ramp) | Daily operating float only |
 | SEP-10 key (`SIGNING_SEED`) | Railway environment variable | SEP-10 challenges only (Polaris has no extension point there) | **None** on mainnet |
-| Cold wallet | Stellar multisig, dual approval (mainnet) | Treasury movements | Bulk of funds |
+| Treasury wallet | Separate VERSO account, not connected to the anchor | Treasury movements (funds the hot wallet) | Bulk of funds |
 
 - `verso_integrations/custody.py` — `VersoCustodyIntegration` builds each payout with the Turnkey wallet as source, requests the signature (`sign_raw_payload` over the transaction hash), **verifies it locally against the wallet's public key** before submitting, and saves the signed envelope first so that retries resubmit the same envelope (never a second payment). Payouts above `MAX_PAYOUT_USDC` are not signed and are left `blocked` for operator review.
 - `verso_integrations/turnkey_signer.py` — the Turnkey client. The backend authenticates as a **non-root service user** (root users bypass Turnkey policies), whose policy only allows signing with this wallet. Its API credentials are set **only on the `DEPOSITO` service**, the only one that pays; the other services know only the public address.
 - `verso_integrations/stellar_payout.py` (the T1 admin payout signed with `SIGNING_SEED`) was removed, leaving a single signing path for USDC payouts.
 
-What this changes versus a seed in an environment variable: the backend holds an API credential, not the key. It can be revoked and rotated in seconds without changing the wallet, it can only sign with this wallet, and every signature is recorded in Turnkey's activity log. **Known limit:** Turnkey's policy engine cannot parse Stellar transactions, so it cannot enforce amounts. Amount controls therefore rely on a low hot wallet balance, the cold wallet, the `MAX_PAYOUT_USDC` cap in VERSO's code, and the D3 reconciliation alarms (an unexpected outflow raises a discrepancy), which is the trigger to revoke the API key.
+What this changes versus a seed in an environment variable: the backend holds an API credential, not the key. It can be revoked and rotated in seconds without changing the wallet, it can only sign with this wallet, and every signature is recorded in Turnkey's activity log. **Known limit:** Turnkey's policy engine cannot parse Stellar transactions, so it cannot enforce amounts. Amount controls therefore rely on a low hot wallet balance, a separate treasury wallet, the `MAX_PAYOUT_USDC` cap in VERSO's code, and the D3 reconciliation alarms (an unexpected outflow raises a discrepancy), which is the trigger to revoke the API key.
 
 **Verified on testnet (2026-10-13)** — Turnkey wallet [`GDNPLMIEFF7Z67W4XW2F3NPM7Z6IN5YOOH43WMYJR2LIXDGFJZ2KFF5S`](https://stellar.expert/explorer/testnet/account/GDNPLMIEFF7Z67W4XW2F3NPM7Z6IN5YOOH43WMYJR2LIXDGFJZ2KFF5S):
 
@@ -456,6 +490,10 @@ The correct place in the protocol for the KYC check and the DIDIT onboarding red
 
 ## Documentation
 
+- [`docs/IMPLEMENTATION_GUIDE.md`](docs/IMPLEMENTATION_GUIDE.md) — how SEP-1, SEP-10, SEP-24 and SEP-38 are implemented on django-polaris.
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — mainnet architecture: components, keys and custody, trust boundaries, data flows.
+- [`docs/CALLBACKS.md`](docs/CALLBACKS.md) — callback reference: every Polaris integration hook and external interface.
+- [`docs/RUNBOOK.md`](docs/RUNBOOK.md) — operator runbook: fiat settlement, exceptions, reconciliation, incidents.
 - [`docs/T2_EVIDENCE.md`](docs/T2_EVIDENCE.md) — Tranche 2 evidence: transactions, quotes, reconciliation report and alerts.
 
 ## License
