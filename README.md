@@ -337,9 +337,9 @@ for external security review; available for ecosystem user testing upon mainnet 
 | #   | Deliverable                                   | Status                                                                                                                       |
 | --- | --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | 1   | Mainnet launch SEP-1/10/24/38                 | **Covered** — live on mainnet since 2026-10-16; hot wallet with USDC trustline (Turnkey custody); SEP-1 5/5 and SEP-10 14/17 in the SDF anchor test suite; SEP-38 quote shown before every transaction |
-| 2   | CCI/CCE Phase 2 semi-automated settlement     | **In progress** — 30 real client operations on mainnet, all `completed` (27 on-ramp + 3 off-ramp, 9 accounts); transfers from 3 Peruvian banks (BCP, Alfin Banco, Interbank); [operator runbook](docs/RUNBOOK.md); settlement-time report pending |
+| 2   | CCI/CCE Phase 2 semi-automated settlement     | **Covered** — 30 real client operations on mainnet, all `completed` (27 on-ramp + 3 off-ramp, 9 accounts); **average settlement ~5 minutes**; transfers from 3 Peruvian banks (BCP, Alfin Banco, Interbank); [operator runbook](docs/RUNBOOK.md) |
 | 3   | Operational proof + Stellar Anchor Directory  | **Covered, with a deviation** — 30 real on/off-ramp operations verifiable on [Stellar Expert](https://stellar.expert/explorer/public/account/GCYWYXFOWGOXOLUI6ZXBSMMRRK4KJUUVHBBSPMM6XAEOAX2YU5KZNJMM); Anchor Directory replaced by open access from any Stellar wallet (see below) |
-| 4   | Hardening + audit preparation                 | **In progress** — Turnkey signing verified on-chain and in `test_custody.py`; callbacks reviewed and documented; edge-case CI suite in progress |
+| 4   | Hardening + audit preparation                 | **Covered** — Turnkey signing verified on-chain and in `test_custody.py`; callbacks reviewed and documented; edge-case suite in CI (`test_edge_cases.py`, 49 tests) and 3 issues fixed |
 | 5   | Public technical documentation                | **Covered** — [implementation guide](docs/IMPLEMENTATION_GUIDE.md), [mainnet architecture](docs/ARCHITECTURE.md), [callback reference](docs/CALLBACKS.md) and [operator runbook](docs/RUNBOOK.md) |
 
 ### Deliverable 1 — Mainnet launch SEP-1/10/24/38
@@ -361,7 +361,7 @@ treasury wallet**, not connected to the anchor or its servers, which funds the h
 | Criterion | Evidence |
 | --- | --- |
 | 30 consecutive real transactions | **30 completed** on mainnet between 2026-10-18 and 2026-10-27: 27 on-ramp (PEN/USD → USDC) and 3 off-ramp (USDC → PEN/USD), from 9 client accounts, all visible in the [hot wallet history](https://stellar.expert/explorer/public/account/GCYWYXFOWGOXOLUI6ZXBSMMRRK4KJUUVHBBSPMM6XAEOAX2YU5KZNJMM) |
-| Average settlement ≤ ~30 minutes | Settlement-time report from the admin timestamps: **pending**. Reference: first on-ramp ~2 min 50 s from start to USDC paid (tx [`1c49fbfa…`](https://stellar.expert/explorer/public/tx/1c49fbfacf18501b113279fa8d5af1774b8839d45b1f42d540e5b0cc5abb496c)); first off-ramp ~21 min from the on-chain USDC payment to completion (tx [`63af8460…`](https://stellar.expert/explorer/public/tx/63af8460c4aa0582f1aea9049bff427527b86c3f32285c0619f08007bafc49d2)) |
+| Average settlement ≤ ~30 minutes | **~5.4 minutes on average over the 30 operations.** On-ramp: from the client's declared bank transfer to the USDC payment on-chain (27 operations, ~5.0 min; 26 of them under 15 min, slowest ~31 min). Off-ramp: from the client's USDC payment on-chain to the fiat payout (3 operations, ~8.8 min). Computed from the admin timestamps (minute precision) and the on-chain payment times. Example: first on-ramp, tx [`1c49fbfa…`](https://stellar.expert/explorer/public/tx/1c49fbfacf18501b113279fa8d5af1774b8839d45b1f42d540e5b0cc5abb496c) |
 | Transfers from at least 3 different Peruvian banks | **BCP, Alfin Banco and Interbank.** CCI/CCE is interbank, so clients can pay from any Peruvian bank to VERSO's account |
 | Operator runbook published on GitHub | [`docs/RUNBOOK.md`](docs/RUNBOOK.md) |
 
@@ -393,8 +393,34 @@ production. This also covers the objective *"available for ecosystem user testin
 | --- | --- |
 | Callback endpoints reviewed | Every Polaris integration point and external interface is documented with its inputs, outputs and failure modes in [`docs/CALLBACKS.md`](docs/CALLBACKS.md) |
 | Signing verified ("KMS signing verified") | Turnkey signing (KMS replacement, see deviation 2): each signature is verified locally against the hot wallet before submission; payouts above `MAX_PAYOUT_USDC` are blocked; signed envelopes are persisted so retries never pay twice. Verified on-chain on testnet and mainnet and covered by `test_custody.py` |
-| Edge-case suite in CI (invalid SEP-10 signatures, malformed payloads, duplicate IDs, webhook replay) | **In progress.** Existing coverage: malformed SEP-10 XDR returns 400 (`test_sep10.py`), payout retries without double payment (`test_custody.py`), duplicate on-chain events ignored by reconciliation (`reconciliation/tests/`). CI runs on every push against PostgreSQL + Redis |
-| Issues resolved before mainnet | Pre-audit fixes listed above (*Pre-audit hardening*) and in the T2 section; T3 operational fixes covered by tests (minimum-amount quotes, "change amount" step) |
+| Edge-case suite in CI (invalid SEP-10 signatures, malformed payloads, duplicate IDs, webhook replay) | [`backend/verso_integrations/tests/test_edge_cases.py`](backend/verso_integrations/tests/test_edge_cases.py), one section per group (see table below). Runs on every push against PostgreSQL + Redis, together with the rest of the suite |
+| Issues resolved before mainnet | Pre-audit fixes listed above (*Pre-audit hardening*) and in the T2 section; T3 operational fixes covered by tests (minimum-amount quotes, "change amount" step); **3 issues found during the T3 hardening review, fixed** (below) |
+
+**Edge-case suite** (`test_edge_cases.py`). Each test simulates an attack or an operator mistake and checks the safe
+outcome:
+
+| Group | What is attempted | Expected and verified outcome |
+| --- | --- | --- |
+| **Invalid SEP-10 signatures** | Challenge signed by another account, unsigned, with an extra signer, forged with another server key, expired, built for another network or another home domain; invalid account or home domain in the request; SEP-24 calls with no token, a token signed with another key, an expired token, or the token of another account | No JWT is issued (400); SEP-24 data is refused (403) and another account's transaction is not found (404). The legitimate flow still returns a token |
+| **Malformed payloads** | Negative, zero, non-numeric, over-precise or non-finite amounts; payout account with missing fields or an unknown source of funds; receipts that are executables, HTML or text, or larger than 10 MB; unknown assets and invalid amounts in SEP-24; unknown assets, non-numeric amounts, both amounts or broken JSON in SEP-38; non-UUID transaction IDs on every webview endpoint | Validation error (400/403/404), **never a server error**, and no order is created |
+| **Duplicate IDs** | *Mark fiat received* and *Mark fiat sent* clicked twice; *Mark fiat sent* with no on-chain USDC; the deposit receipt posted twice; **a second USDC payment carrying the memo of a withdrawal that was already paid** | The first confirmation is kept and nothing is paid twice; fiat is never released without on-chain USDC; a repeated payment is left unmatched and raises a reconciliation discrepancy |
+| **Webhook replay** | The DIDIT return URL replayed without a session, with a forged `status=Approved`, for a different transaction, or replayed after a valid approval; the webview status endpoint called with a known transaction ID but without the session that opened it | KYC is never approved by the request itself: the anchor always re-checks the status with VERSO Core for the session's own user and transaction. Transaction status is only returned to the session that opened the transaction (403 otherwise) |
+
+Related coverage elsewhere: payout idempotency across crashes and custody outages (`test_custody.py`) and idempotent
+ingest of on-chain events (`reconciliation/tests/test_sync.py`).
+
+**Issues found during the hardening review and fixed:**
+
+1. **Non-UUID transaction IDs caused HTTP 500** on six webview endpoints (`/sep24/transaction/poll/`,
+   `/sep24/onboarding/`, `/sep24/onboarding/switch/`, `/sep24/kyc/start/`, `/sep24/kyc/poll/`,
+   `/sep24/kyc/callback/`). They now answer 400.
+2. **A second payment with the memo of an already-paid withdrawal was attached silently** to that withdrawal by the
+   reconciliation. It is now left unmatched, so it raises an `unmatched_inbound` discrepancy and an alarm, and the
+   operator handles it as described in the [runbook](docs/RUNBOOK.md).
+3. **The webview status endpoint answered anyone holding a transaction ID** (`/sep24/transaction/poll/`, used by
+   the waiting pages to refresh themselves). It returned the same data as `GET /sep24/transaction`, which requires a
+   SEP-10 token. It now only answers the browser session that opened the transaction through the SEP-24
+   interactive token, and the waiting pages stop polling when the session is no longer valid.
 
 ### Deliverable 5 — Public technical documentation
 
@@ -471,7 +497,7 @@ python manage.py test verso_integrations reconciliation
 
 No PostgreSQL or Redis is needed locally (SQLite by default).
 
-**182 tests** (147 in `verso_integrations`, 35 in `reconciliation`) covering SEP-1, SEP-10, SEP-24 (on-ramp, off-ramp, KYC gate), SEP-38 pricing and quotes, and the D3 reconciliation (event parsing, sync, matching, reconcile, alerts, report). GitHub Actions runs them on every push and pull request against **PostgreSQL + Redis** (`.github/workflows/backend-tests.yml`).
+**251 tests** (216 in `verso_integrations`, 35 in `reconciliation`) covering SEP-1, SEP-10, SEP-24 (on-ramp, off-ramp, KYC gate), SEP-38 pricing and quotes, Turnkey custody, the D3 reconciliation (event parsing, sync, matching, reconcile, alerts, report) and the T3 edge-case suite (`test_edge_cases.py`). GitHub Actions runs them on every push and pull request against **PostgreSQL + Redis** (`.github/workflows/backend-tests.yml`).
 
 ## Mainnet switch (T3) — environment checklist
 

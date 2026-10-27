@@ -27,6 +27,11 @@
       headers: { Accept: "application/json" },
     })
       .then(function (response) {
+        if (response.status === 403 && timerId !== null) {
+          // Session expired or not the one that opened the transaction: stop polling.
+          window.clearInterval(timerId);
+          timerId = null;
+        }
         if (!response.ok) {
           throw new Error("poll failed");
         }

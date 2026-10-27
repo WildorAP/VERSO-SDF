@@ -225,6 +225,7 @@ and Redis. Main test modules:
 | SEP-24 | `test_sep24.py`, `test_sep24_withdraw.py`, `test_deposit_flow.py`, `test_kyc_gate.py`, `test_kyc_views.py`, `test_wallet_callbacks.py`, `test_withdraw_wallet_callbacks.py`, `test_sep24_coop_middleware.py` |
 | SEP-38 | `test_sep38.py`, `test_rates.py`, `test_validate_quotes.py` |
 | Custody | `test_custody.py` |
+| Edge cases (invalid SEP-10 signatures, malformed payloads, duplicate IDs, webhook replay) | `test_edge_cases.py` |
 | Reconciliation | `reconciliation/tests/` (events, sync, matching, reconcile, alerts, report, bootstrap) |
 
 End-to-end checks against a live deployment: `@stellar/anchor-tests` (SEP-1, SEP-10), the Stellar Demo Wallet on

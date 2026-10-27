@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import time
+import uuid
 from dataclasses import dataclass
 from decimal import Decimal
 from urllib.parse import urlencode
@@ -100,6 +101,11 @@ def _webapp_url(request: HttpRequest, transaction: Transaction) -> str:
 def _load_sep24_transaction(request: HttpRequest, transaction_id: str | None) -> Transaction:
     if not transaction_id:
         raise ValueError("transaction_id is required.")
+    # Django raises ValidationError (HTTP 500) when a non-UUID reaches the UUID primary key lookup.
+    try:
+        uuid.UUID(str(transaction_id))
+    except ValueError:
+        raise ValueError("transaction_id is not valid.")
     return get_object_or_404(
         Transaction,
         id=transaction_id,
@@ -308,16 +314,11 @@ def kyc_callback(request: HttpRequest) -> HttpResponse:
 
 def onboarding_switch(request: HttpRequest) -> HttpResponse:
     """Toggle between login and register steps inside the SEP-24 webview."""
-    transaction_id = request.GET.get("transaction_id")
     mode = (request.GET.get("mode") or "login").strip().lower()
-    if not transaction_id:
-        return HttpResponseBadRequest("transaction_id is required.")
-
-    transaction = get_object_or_404(
-        Transaction,
-        id=transaction_id,
-        protocol=Transaction.PROTOCOL.sep24,
-    )
+    try:
+        transaction = _load_sep24_transaction(request, request.GET.get("transaction_id"))
+    except ValueError as exc:
+        return HttpResponseBadRequest(str(exc))
     if mode == "register":
         mark_wants_register(request, transaction.id)
     else:

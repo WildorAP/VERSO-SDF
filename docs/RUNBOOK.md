@@ -100,7 +100,7 @@ opens a discrepancy for anything it cannot explain. Alarms notify operations by 
 | Kind | Meaning | Typical cause | Resolution |
 | --- | --- | --- | --- |
 | `balance_mismatch` | On-chain balance ≠ internal ledger | A movement not yet ingested, or a movement outside SEP-24 | Wait one cycle; if it persists, find the movement on Stellar Expert and classify it |
-| `unmatched_inbound` | USDC arrived without a matching transaction | Treasury top-up, or a withdrawal sent with a wrong memo | Top-up → resolve as `funding`; client payment → handle as in [section 4](#4-off-ramp-client-sends-usdc-receives-fiat) |
+| `unmatched_inbound` | USDC arrived without a matching transaction | Treasury top-up, a withdrawal sent without memo or with a wrong memo, or a second payment with the memo of a withdrawal that was already paid | Top-up → resolve as `funding`; client payment → handle as in [section 4](#4-off-ramp-client-sends-usdc-receives-fiat) |
 | `unmatched_outbound` | USDC left without a matching transaction | Sweep to the treasury wallet or a refund | Verify it was authorized → resolve as `manual_transfer`. **Not authorized → security incident** |
 | `amount_mismatch` | Matched, but the amount differs from the transaction | Client sent a different amount | Check that the off-ramp was settled with the recomputed amount → `fixed` |
 | `missing_onchain` | A completed transaction has no on-chain movement | Ingest delay, or data inconsistency | Wait one cycle; then investigate before closing |

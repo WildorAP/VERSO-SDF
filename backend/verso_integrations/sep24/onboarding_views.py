@@ -10,7 +10,7 @@ from __future__ import annotations
 from urllib.parse import urlencode
 
 from django.http import HttpRequest, HttpResponse, HttpResponseBadRequest
-from django.shortcuts import get_object_or_404, redirect, render
+from django.shortcuts import redirect, render
 from django.urls import reverse
 from polaris.models import Transaction
 from rest_framework.request import Request
@@ -23,6 +23,7 @@ from verso_integrations.sep24.kyc_gate import (
     onboarding_step,
 )
 from verso_integrations.sep24.kyc_views import (
+    _load_sep24_transaction,
     _webapp_url,
     didit_embed_origins_json,
     prepare_kyc_step,
@@ -74,14 +75,7 @@ def _as_drf_request(request: HttpRequest) -> Request:
 
 
 def _load_transaction(request: HttpRequest) -> Transaction:
-    transaction_id = request.GET.get("transaction_id")
-    if not transaction_id:
-        raise ValueError("transaction_id is required.")
-    return get_object_or_404(
-        Transaction,
-        id=transaction_id,
-        protocol=Transaction.PROTOCOL.sep24,
-    )
+    return _load_sep24_transaction(request, request.GET.get("transaction_id"))
 
 
 def _has_operate_meta(transaction: Transaction) -> bool:

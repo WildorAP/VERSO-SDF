@@ -205,6 +205,27 @@ def _apply_match(
         _resolve_open(f"{Discrepancy.Kind.UNMATCHED_OUTBOUND}:{entry.event_id}")
 
 
+def _is_repeated_withdrawal_payment(entry: LedgerEntry, tx: Transaction) -> bool:
+    """
+    True when ``tx`` was already paid by a different on-chain payment.
+
+    Polaris only takes the first payment carrying a withdrawal's memo; a second one with the same memo
+    is money with no order behind it, so it must stay unmatched (and raise a discrepancy) instead of
+    being attached silently to the paid withdrawal.
+    """
+    if tx.stellar_transaction_id:
+        return tx.stellar_transaction_id != entry.stellar_tx_hash
+    return (
+        LedgerEntry.objects.filter(
+            polaris_transaction=tx,
+            direction=LedgerEntry.Direction.INBOUND,
+            match_status=LedgerEntry.MatchStatus.MATCHED,
+        )
+        .exclude(stellar_tx_hash=entry.stellar_tx_hash)
+        .exists()
+    )
+
+
 def _try_match_entry(entry: LedgerEntry) -> bool:
     if entry.match_status == LedgerEntry.MatchStatus.CLASSIFIED:
         return True
@@ -217,6 +238,14 @@ def _try_match_entry(entry: LedgerEntry) -> bool:
                 memo=entry.memo_raw,
                 memo_type=Transaction.MEMO_TYPES.hash,
             ).first()
+            if tx is not None and _is_repeated_withdrawal_payment(entry, tx):
+                logger.warning(
+                    "Inbound %s repeats the memo of withdrawal %s, already paid by %s; left unmatched",
+                    entry.stellar_tx_hash,
+                    tx.id,
+                    tx.stellar_transaction_id,
+                )
+                tx = None
         if tx is None:
             tx = Transaction.objects.filter(
                 kind=Transaction.KIND.withdrawal,
