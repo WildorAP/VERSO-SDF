@@ -330,15 +330,79 @@ Tested on 2026-09-29 with a synthetic critical discrepancy: OK → ALARM → OK,
 
 ## Deliverable status — Tranche 3 (SCF #44)
 
-Mainnet launch: VERSO Anchor live on Stellar mainnet with real PEN/USD ↔ USDC settlement through CCI/CCE.
+**Objective (SCF #44):** VERSO Anchor live on mainnet, operating SEP-1/10/24/38 compliant infrastructure on Stellar
+with real PEN/USDC transactions on-chain; CCI/CCE Phase 2 semi-automated settlement operational; codebase prepared
+for external security review; available for ecosystem user testing upon mainnet launch.
 
 | #   | Deliverable                                   | Status                                                                                                                       |
 | --- | --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| 1   | Mainnet launch SEP-1/10/24/38                 | **In progress** — live on mainnet since 2026-10-16; hot wallet with USDC trustline (Turnkey custody); SEP-1 5/5 and SEP-10 14/17 in the SDF anchor test suite |
-| 2   | CCI/CCE Phase 2 semi-automated settlement     | **In progress** — 30 real client operations on-chain (27 on-ramp + 3 off-ramp, 9 accounts); transfers from 3 Peruvian banks (BCP, Alfin Banco, Interbank); [operator runbook](docs/RUNBOOK.md); settlement-time report pending |
-| 3   | Operational proof + Stellar Anchor Directory  | **In progress** — 30 real on/off-ramp operations verifiable on [Stellar Expert](https://stellar.expert/explorer/public/account/GCYWYXFOWGOXOLUI6ZXBSMMRRK4KJUUVHBBSPMM6XAEOAX2YU5KZNJMM); reconciliation and alarms running on mainnet; Directory: see report |
-| 4   | Hardening + audit preparation                 | **In progress** — Turnkey custody with on-chain evidence (deviation 2) and `test_custody.py`; edge-case CI suite pending      |
-| 5   | Public technical documentation                | **In progress** — [implementation guide](docs/IMPLEMENTATION_GUIDE.md), [mainnet architecture](docs/ARCHITECTURE.md), [callback reference](docs/CALLBACKS.md) and [operator runbook](docs/RUNBOOK.md) |
+| 1   | Mainnet launch SEP-1/10/24/38                 | **Covered** — live on mainnet since 2026-10-16; hot wallet with USDC trustline (Turnkey custody); SEP-1 5/5 and SEP-10 14/17 in the SDF anchor test suite; SEP-38 quote shown before every transaction |
+| 2   | CCI/CCE Phase 2 semi-automated settlement     | **In progress** — 30 real client operations on mainnet, all `completed` (27 on-ramp + 3 off-ramp, 9 accounts); transfers from 3 Peruvian banks (BCP, Alfin Banco, Interbank); [operator runbook](docs/RUNBOOK.md); settlement-time report pending |
+| 3   | Operational proof + Stellar Anchor Directory  | **Covered, with a deviation** — 30 real on/off-ramp operations verifiable on [Stellar Expert](https://stellar.expert/explorer/public/account/GCYWYXFOWGOXOLUI6ZXBSMMRRK4KJUUVHBBSPMM6XAEOAX2YU5KZNJMM); Anchor Directory replaced by open access from any Stellar wallet (see below) |
+| 4   | Hardening + audit preparation                 | **In progress** — Turnkey signing verified on-chain and in `test_custody.py`; callbacks reviewed and documented; edge-case CI suite in progress |
+| 5   | Public technical documentation                | **Covered** — [implementation guide](docs/IMPLEMENTATION_GUIDE.md), [mainnet architecture](docs/ARCHITECTURE.md), [callback reference](docs/CALLBACKS.md) and [operator runbook](docs/RUNBOOK.md) |
+
+### Deliverable 1 — Mainnet launch SEP-1/10/24/38
+
+| Criterion | Evidence |
+| --- | --- |
+| Hot wallet active on mainnet with USDC trustline | Turnkey wallet [`GCYW…NJMM`](https://stellar.expert/explorer/public/account/GCYWYXFOWGOXOLUI6ZXBSMMRRK4KJUUVHBBSPMM6XAEOAX2YU5KZNJMM); trustline to Circle USDC signed by Turnkey ([`8d7e05e2…`](https://stellar.expert/explorer/public/tx/8d7e05e29ae29be7f987b7870e9fc909815a8cc0a8fe869e53b69681c9af1643)) |
+| Mainnet `stellar.toml` without validation errors | SDF anchor test suite (`@stellar/anchor-tests`) **SEP-1 5/5** against `anchor.versotek.io`. Stellar Laboratory does not validate `stellar.toml`; the official CLI suite is used instead |
+| SEP-10 operational on mainnet | **SEP-10 14/17**; the 3 remaining tests (*Account Signer Support*) need funded test accounts that the suite can only create on testnet, where they pass |
+| SEP-38 quotes visible in a wallet before each real transaction | The SEP-24 webview shows the live rate, the amount sent and the amount received before the client confirms, for every operation; the same price is served by `/sep38/price` and `/sep38/quote` ([how it works](docs/IMPLEMENTATION_GUIDE.md#5-sep-38--quotes)) |
+
+Two items in the deliverable description are implemented differently: signing uses **Turnkey** instead of AWS KMS
+(AWS KMS cannot sign Ed25519; see *Architecture note*, point 2), and the reserve is held in a **separate VERSO
+treasury wallet**, not connected to the anchor or its servers, which funds the hot wallet
+([keys and custody](docs/ARCHITECTURE.md#keys-and-custody)).
+
+### Deliverable 2 — CCI/CCE Phase 2 semi-automated settlement
+
+| Criterion | Evidence |
+| --- | --- |
+| 30 consecutive real transactions | **30 completed** on mainnet between 2026-10-18 and 2026-10-27: 27 on-ramp (PEN/USD → USDC) and 3 off-ramp (USDC → PEN/USD), from 9 client accounts, all visible in the [hot wallet history](https://stellar.expert/explorer/public/account/GCYWYXFOWGOXOLUI6ZXBSMMRRK4KJUUVHBBSPMM6XAEOAX2YU5KZNJMM) |
+| Average settlement ≤ ~30 minutes | Settlement-time report from the admin timestamps: **pending**. Reference: first on-ramp ~2 min 50 s from start to USDC paid (tx [`1c49fbfa…`](https://stellar.expert/explorer/public/tx/1c49fbfacf18501b113279fa8d5af1774b8839d45b1f42d540e5b0cc5abb496c)); first off-ramp ~21 min from the on-chain USDC payment to completion (tx [`63af8460…`](https://stellar.expert/explorer/public/tx/63af8460c4aa0582f1aea9049bff427527b86c3f32285c0619f08007bafc49d2)) |
+| Transfers from at least 3 different Peruvian banks | **BCP, Alfin Banco and Interbank.** CCI/CCE is interbank, so clients can pay from any Peruvian bank to VERSO's account |
+| Operator runbook published on GitHub | [`docs/RUNBOOK.md`](docs/RUNBOOK.md) |
+
+Settlement is **semi-automated by design**: quotes, CCI instructions, on-chain payouts, on-chain detection of
+withdrawals and reconciliation are automatic; a VERSO operator confirms each fiat movement in the admin, as required
+by VERSO's obligations as a PSAV in Peru. A withdrawal cannot be completed until its USDC payment is detected on-chain.
+
+### Deliverable 3 — Operational proof + Stellar Anchor Directory
+
+| Criterion | Evidence |
+| --- | --- |
+| 10+ real on/off-ramp transactions verifiable on Stellar Expert | **30**, see Deliverable 2 |
+| Account history public | Hot wallet history on [Stellar Expert](https://stellar.expert/explorer/public/account/GCYWYXFOWGOXOLUI6ZXBSMMRRK4KJUUVHBBSPMM6XAEOAX2YU5KZNJMM); every payout and every received withdrawal is a public transaction |
+| VERSO submitted to the Stellar Anchor Directory | **Deviation** — see below |
+
+Reconciliation runs continuously on mainnet: every USDC movement of the hot wallet is ingested through Stellar RPC,
+matched to its SEP-24 transaction and checked against the on-chain balance every ~60 s, with CloudWatch alarms.
+
+**Deviation — Anchor Directory → open access from any wallet.** The Anchor Directory has no public submission
+process, and being listed does not put the anchor inside a wallet: each wallet integrates anchors through its own
+agreement. Instead, VERSO opened the anchor to **any Stellar wallet**: it is discoverable through its `stellar.toml`
+by any SEP-24 wallet, and the **ANCHOR** button on [versotek.io](https://versotek.io) lets a user connect their own
+wallet, sign SEP-10 with it and run the SEP-24 on-ramp or off-ramp. VERSO itself operates through the anchor in
+production. This also covers the objective *"available for ecosystem user testing upon mainnet launch"*.
+
+### Deliverable 4 — Hardening + audit preparation
+
+| Criterion | Evidence |
+| --- | --- |
+| Callback endpoints reviewed | Every Polaris integration point and external interface is documented with its inputs, outputs and failure modes in [`docs/CALLBACKS.md`](docs/CALLBACKS.md) |
+| Signing verified ("KMS signing verified") | Turnkey signing (KMS replacement, see deviation 2): each signature is verified locally against the hot wallet before submission; payouts above `MAX_PAYOUT_USDC` are blocked; signed envelopes are persisted so retries never pay twice. Verified on-chain on testnet and mainnet and covered by `test_custody.py` |
+| Edge-case suite in CI (invalid SEP-10 signatures, malformed payloads, duplicate IDs, webhook replay) | **In progress.** Existing coverage: malformed SEP-10 XDR returns 400 (`test_sep10.py`), payout retries without double payment (`test_custody.py`), duplicate on-chain events ignored by reconciliation (`reconciliation/tests/`). CI runs on every push against PostgreSQL + Redis |
+| Issues resolved before mainnet | Pre-audit fixes listed above (*Pre-audit hardening*) and in the T2 section; T3 operational fixes covered by tests (minimum-amount quotes, "change amount" step) |
+
+### Deliverable 5 — Public technical documentation
+
+| Criterion | Document |
+| --- | --- |
+| SEP-1/10/24/38 implementation guide | [`docs/IMPLEMENTATION_GUIDE.md`](docs/IMPLEMENTATION_GUIDE.md) |
+| Mainnet architecture diagram | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (component and sequence diagrams) |
+| Callback reference + runbook on GitHub | [`docs/CALLBACKS.md`](docs/CALLBACKS.md) and [`docs/RUNBOOK.md`](docs/RUNBOOK.md) |
 
 ### Mainnet deployment (2026-10-16)
 
@@ -348,7 +412,7 @@ Mainnet launch: VERSO Anchor live on Stellar mainnet with real PEN/USD ↔ USDC 
 | Asset                        | USDC (Circle) `GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN`, `status = "live"`                                                                                                             |
 | Hot wallet (Turnkey)         | [`GCYWYXFOWGOXOLUI6ZXBSMMRRK4KJUUVHBBSPMM6XAEOAX2YU5KZNJMM`](https://stellar.expert/explorer/public/account/GCYWYXFOWGOXOLUI6ZXBSMMRRK4KJUUVHBBSPMM6XAEOAX2YU5KZNJMM) — separate service user and policy from testnet |
 | USDC trustline               | Signed by Turnkey: [`8d7e05e2…`](https://stellar.expert/explorer/public/tx/8d7e05e29ae29be7f987b7870e9fc909815a8cc0a8fe869e53b69681c9af1643)                                                              |
-| SEP-10 signing key           | `GBXCGFP2DX7V7LHMIQACZ6CWV6C6JVU54CQV6GXSIV7B656ZW2T53WIO` — new mainnet key, **holds no funds**                                                                                                       |
+| SEP-10 signing key           | Published as `SIGNING_KEY` in the mainnet `stellar.toml`; separate from testnet and **holds no funds** (it only signs SEP-10 challenges)                                                                 |
 | Database                     | New PostgreSQL for mainnet, no testnet data carried over                                                                                                                                              |
 | D3 reconciliation            | Running on mainnet (Stellar RPC); every run OK, delta 0, 0 discrepancies; 4 CloudWatch alarms on `Environment=mainnet`                                                                                 |
 | Settlement account           | CCI/CCE at VERSO's operating bank (separate PEN and USD accounts), shown to the client in the SEP-24 deposit instructions                                                                              |
