@@ -1,6 +1,10 @@
 # Tranche 2 — Deliverable evidence (testnet)
 
-Anchor: `anchor.versotek.io` · Network: Stellar testnet · Hot wallet (`SIGNING_SEED`):
+> **Domains.** This evidence was produced when `anchor.versotek.io` served the testnet anchor. Since 2026-10-16
+> that domain serves **mainnet**; the testnet anchor and its database (including every transaction below) are now
+> at [`verso-sdf-testnet.up.railway.app`](https://verso-sdf-testnet.up.railway.app).
+
+Anchor: `anchor.versotek.io` (testnet at the time) · Network: Stellar testnet · Hot wallet (`SIGNING_SEED`):
 [`GBTV5QYBPGHGT2SVUHCFRRKFFWUWHOEPKH7QAXGTJHFGFYZRIE24UOPB`](https://stellar.expert/explorer/testnet/account/GBTV5QYBPGHGT2SVUHCFRRKFFWUWHOEPKH7QAXGTJHFGFYZRIE24UOPB)
 
 Sources: Polaris `Transaction` table in production PostgreSQL (queried from the Railway shell on
@@ -22,7 +26,7 @@ from **2 different client accounts**:
 ### On-ramp (fiat → USDC) — 12 completed
 
 Flow: wallet SEP-10 → SEP-24 interactive webview (VERSO login + KYC) → CCI/CCE instructions →
-operations confirm fiat receipt in admin (**Mark PEN received**, Phase 1 manual settlement) →
+operations confirm fiat receipt in admin (**Mark PEN received**, now named **Mark fiat received**; Phase 1 manual settlement) →
 `process_pending_deposits` (Railway **DEPOSITO**) sends USDC on-chain.
 
 | # | SEP-24 id | Fiat | Fiat in | USDC out | Rate (fiat/USDC) | Client | Completed (UTC) | Stellar tx |

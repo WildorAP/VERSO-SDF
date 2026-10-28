@@ -134,7 +134,8 @@ the payout is sent as a claimable balance.
 | 2. Payout account | Client enters bank, CCI and account holder, plus the declared source of funds (PSAV requirement). "Change amount" is available until this step is confirmed | `pending_user_transfer_start` |
 | 3. USDC payment | The webview and `GET /sep24/transaction` return `withdraw_anchor_account` (the hot wallet) and a **hash memo** derived from the transaction ID. The wallet sends the USDC with that memo; the webview notifies the opener with `postMessage` | `pending_user_transfer_start` |
 | 4. Detection | Polaris `watch_transactions` matches the incoming payment by memo and records `stellar_transaction_id` | `pending_anchor` |
-| 5. Fiat payout | Operations transfer the fiat by CCI/CCE and click **Mark fiat sent** | `completed` |
+| 5. Awaiting fiat payout | `VersoRailsIntegration.execute_outgoing_transaction` recomputes the fiat amount if the client sent a different USDC amount and waits for operations | `pending_external` |
+| 6. Fiat payout | Operations transfer the fiat by CCI/CCE and click **Mark fiat sent** | `completed` |
 
 **Safety rule:** a withdrawal **cannot be completed unless its USDC payment was detected on-chain**
 (`WithdrawalUsdcNotReceivedError` in `withdraw.py`), so operations can never pay fiat for USDC that never arrived. If

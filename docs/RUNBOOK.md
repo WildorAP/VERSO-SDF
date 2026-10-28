@@ -65,7 +65,7 @@ bank transfer → receipt upload.
 | Transaction **blocked**: amount above the payout limit | Expected protection. Verify the operation with compliance; release it only through an authorized change of the limit, then let the worker retry |
 | Transaction **blocked**: custody refused or signature invalid | Stop. Treat as a possible custody incident ([section 8](#8-security-incidents)) |
 | Payout retried repeatedly (network or custody temporarily unavailable) | No action needed; payouts are idempotent and the worker retries. Escalate if it lasts more than 15 minutes |
-| Client has no USDC trustline | The payout is sent as a **claimable balance**; tell the client to claim it from their wallet |
+| Client has no USDC trustline | If the client's wallet supports claimable balances, the payout is sent as a **claimable balance**: tell the client to claim it from their wallet. Otherwise the transaction waits in `pending_trust`: ask the client to add the USDC trustline, and the deposit worker pays as soon as it exists |
 
 ## 4. Off-ramp (client sends USDC, receives fiat)
 
@@ -87,7 +87,7 @@ to the hot wallet **with the memo shown** → waiting for fiat.
 | Situation | Action |
 | --- | --- |
 | **Mark fiat sent** is refused ("no on-chain USDC payment registered") | Correct protection: do not pay. If Stellar Expert shows the client's payment with the right memo, the withdrawal worker is not processing ([section 6](#6-worker-health)) |
-| Client sent USDC **without memo or with a wrong memo** | It cannot be matched automatically and appears as an `unmatched_inbound` discrepancy. Identify the client from the sending account and the amount, confirm with them, and either complete the off-ramp manually or refund the USDC to the **same sending account** |
+| Client sent USDC **without memo or with a wrong memo** | It cannot be matched to the withdrawal (the anchor only matches by memo) and appears as an `unmatched_inbound` discrepancy. Identify the client from the sending account and the amount, confirm with them, and **refund the USDC to the same sending account**. The withdrawal cannot be completed with that payment: *Mark fiat sent* requires a payment matched on-chain. If the client still wants to cash out, they send the USDC again with the memo shown. Resolve the discrepancy with a note that includes the refund transaction hash |
 | Client sent a different USDC amount than quoted | Pay the recomputed fiat amount shown in the admin (same locked rate) |
 | Payout CCI rejected by the bank | Contact the client for a correct account; pay again; then mark as sent |
 | Withdrawal abandoned before the client paid | No action; it stays open without any funds moved |
@@ -134,8 +134,10 @@ only on failure: a stream that ends cleanly exits with code 0.
   wallet**, a separate account that is not connected to the anchor or its servers.
 - **Top-up (treasury → hot):** send USDC from the treasury wallet to the hot wallet address taken from the admin,
   then resolve the resulting `unmatched_inbound` as `funding`, with a note.
-- **Sweep (hot → treasury):** when the hot wallet holds more than the float, move the excess to the treasury wallet
-  (signed through the custody provider); resolve the `unmatched_outbound` as `manual_transfer`, with a note.
+- **Sweep (hot → treasury):** when the hot wallet holds more than the float, move the excess to the treasury wallet.
+  This is a manual treasury operation outside the anchor's code (the anchor has no sweep command): the payment must
+  be signed with the hot wallet's key in Turnkey, the only place where that key exists. Resolve the resulting
+  `unmatched_outbound` as `manual_transfer`, with a note. Keeping top-ups small avoids most sweeps.
 - Keep enough **XLM** in the hot wallet for network fees and, if offered, account creation for new clients.
 
 ## 8. Security incidents
