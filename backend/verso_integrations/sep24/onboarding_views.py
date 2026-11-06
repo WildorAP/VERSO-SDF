@@ -33,6 +33,7 @@ from verso_integrations.sep24.wallet_callbacks import (
     persist_sep24_wallet_callbacks,
 )
 from verso_integrations.sep24.onboarding_flow import (
+    OPEN_OPERATION_MESSAGE,
     after_onboarding_form_validation,
     operate_step_for_transaction,
 )
@@ -210,6 +211,11 @@ def _render_step(
             )
             context["didit_origins_json"] = didit_embed_origins_json()
         return render(request, "sep24/onboarding/didit.html", context)
+    if step == "open_operation":
+        context["status_title"] = "Tienes una operación en curso"
+        context["status_message"] = OPEN_OPERATION_MESSAGE
+        context["hide_back_link"] = True
+        return render(request, "sep24/onboarding/status.html", context)
     if step == "pending":
         context["status_message"] = (
             "Tu verificación KYC está en revisión. Te avisaremos cuando puedas operar."

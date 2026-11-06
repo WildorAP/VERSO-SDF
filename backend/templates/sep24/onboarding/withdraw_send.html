@@ -4,7 +4,7 @@
 
 {% block content %}
     <h1>Envía USDC on-chain</h1>
-    <p class="lede">
+    <p class="lede" id="wallet-pay-lede">
         Transfiere exactamente <strong>{{ amount_usdc }} USDC</strong> desde tu wallet
         a nuestra cuenta Stellar. Usa el memo indicado o la transacción no se acreditará.
     </p>
@@ -20,21 +20,7 @@
         </div>
     </div>
 
-    <div class="transfer-card">
-        <p class="transfer-card__eyebrow">Cuenta Stellar del anchor</p>
-
-        <div class="copy-field copy-field--emphasis">
-            <div class="copy-field__label">Cuenta destino (G…)</div>
-            <div class="copy-field__value copy-field__value--mono" id="receiving-account">{{ receiving_account }}</div>
-            <button type="button" class="btn-copy" data-copy-target="receiving-account">Copiar cuenta</button>
-        </div>
-
-        <div class="copy-field copy-field--emphasis">
-            <div class="copy-field__label">Memo ({{ memo_type }})</div>
-            <div class="copy-field__value copy-field__value--mono" id="payment-memo">{{ memo }}</div>
-            <button type="button" class="btn-copy" data-copy-target="payment-memo">Copiar memo</button>
-        </div>
-    </div>
+    {% include "sep24/onboarding/_withdraw_anchor_account.html" %}
 
     {% if payout_bank_details.account_number %}
     <div class="transfer-card">
@@ -57,6 +43,8 @@
     <p class="didit-status" role="status">
         Cuando recibamos tu USDC, iniciaremos la transferencia a tu cuenta bancaria.
     </p>
+
+    {% include "sep24/onboarding/_withdraw_wallet_pay.html" %}
 {% endblock %}
 
 {% block extra_scripts %}

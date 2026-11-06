@@ -1,0 +1,32 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+<h1>{{ title }}</h1>
+
+<table>
+  <tr><th>Operación</th><td>#{{ meta.pk }} · {{ meta.transaction_id }}</td></tr>
+  <tr><th>Wallet</th><td>{{ meta.transaction.stellar_account }}</td></tr>
+  <tr><th>USDC</th><td>{{ meta.amount_usdc }}</td></tr>
+  <tr><th>Fiat</th><td>{{ meta.amount_fiat }} {{ meta.fiat_currency }}</td></tr>
+  <tr><th>Etapa</th><td>{{ stage.label }}</td></tr>
+</table>
+
+{% if active_hold %}
+<p class="errornote">
+  Esta operación está retenida: {{ active_hold.note }}
+  ({{ active_hold.placed_by|default:"usuario eliminado" }}, {{ active_hold.placed_at|date:"d/m/Y H:i" }}).
+  {% if releases_hold %}Si continúas, la retención se cerrará.{% endif %}
+</p>
+{% endif %}
+
+{% if warning %}<p class="errornote">{{ warning }}</p>{% endif %}
+
+<form method="post">
+  {% csrf_token %}
+  {{ form.as_p }}
+  <p>
+    <input type="submit" class="default" value="{{ label }}">
+    <a href="{{ change_url }}">Volver</a>
+  </p>
+</form>
+{% endblock %}

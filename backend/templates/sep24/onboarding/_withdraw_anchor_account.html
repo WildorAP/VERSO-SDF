@@ -1,0 +1,14 @@
+{# Shown abbreviated: the wallet payment button does not need them; the copy buttons copy the full value. #}
+<div class="transfer-card transfer-card--compact">
+    <p class="transfer-card__eyebrow">Cuenta Stellar del anchor</p>
+    <div class="copy-row">
+        <span class="copy-row__label">Cuenta</span>
+        <span class="copy-row__value" title="{{ receiving_account }}">{{ receiving_account|slice:":6" }}…{{ receiving_account|slice:"-4:" }}</span>
+        <button type="button" class="btn-copy" data-copy-value="{{ receiving_account }}">Copiar</button>
+    </div>
+    <div class="copy-row">
+        <span class="copy-row__label">Memo ({{ memo_type }})</span>
+        <span class="copy-row__value" title="{{ memo }}">{{ memo|slice:":6" }}…{{ memo|slice:"-6:" }}</span>
+        <button type="button" class="btn-copy" data-copy-value="{{ memo }}">Copiar</button>
+    </div>
+</div>

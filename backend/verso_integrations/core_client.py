@@ -124,12 +124,19 @@ def register_user(
     return RegisterResult(user_id=int(payload["user_id"]), email=str(payload["email"]))
 
 
-def user_status(*, email: str) -> UserStatusResult:
+def user_status(*, email: str | None = None, stellar_public_key: str | None = None) -> UserStatusResult:
+    """Look up a VERSO user by email, or by the Stellar wallet linked to the account."""
+    if email:
+        params = {"email": email.strip().lower()}
+    elif stellar_public_key:
+        params = {"stellar_public_key": stellar_public_key.strip()}
+    else:
+        raise CoreClientError("email or stellar_public_key is required.")
     try:
         response = requests.get(
             f"{_base_url()}/internal/users/status/",
             headers=_internal_headers(),
-            params={"email": email.strip().lower()},
+            params=params,
             timeout=10,
         )
     except requests.RequestException as exc:
@@ -142,7 +149,7 @@ def user_status(*, email: str) -> UserStatusResult:
 
     payload = response.json()
     if not payload.get("registered"):
-        raise CoreClientError("That email is not registered in VERSO.")
+        raise CoreClientError("That user is not registered in VERSO.")
     return _parse_user_status(payload)
 
 

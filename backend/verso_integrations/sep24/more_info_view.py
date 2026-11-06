@@ -19,6 +19,7 @@ from rest_framework.response import Response
 from verso_integrations.models import Sep24WithdrawMeta
 from verso_integrations.sep24.withdraw_wallet import ensure_withdraw_receiving_details
 from verso_integrations.sep24.wallet_callbacks import (
+    drop_unsafe_wallet_callbacks,
     inject_wallet_callbacks_into_query,
     persist_sep24_wallet_callbacks,
     withdraw_awaiting_wallet_payment,
@@ -29,6 +30,7 @@ from verso_integrations.sep24.wallet_callbacks import (
 @api_view(["GET"])
 @renderer_classes([TemplateHTMLRenderer])
 def verso_more_info(request: Request) -> Response:
+    drop_unsafe_wallet_callbacks(request)
     transaction_id = request.query_params.get("id")
     if transaction_id:
         persist_sep24_wallet_callbacks(request, transaction_id)

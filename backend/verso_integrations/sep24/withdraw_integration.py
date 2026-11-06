@@ -44,11 +44,12 @@ from verso_integrations.sep24.onboarding_flow import (
 from verso_integrations.sep24.withdraw_wallet import build_withdraw_post_url
 from verso_integrations.sep24.transaction_views import TERMINAL_TRANSACTION_STATUSES
 from verso_integrations.sep38 import price_for_pair
+from verso_integrations.operations import customer_message
 from verso_integrations.withdraw import build_payout_bank_details, compute_amount_fiat, usdc_payment_received
 
 
 def _awaiting_usdc_payment(transaction: Transaction) -> bool:
-    if transaction.status == Transaction.STATUS.completed:
+    if transaction.status in {Transaction.STATUS.completed, Transaction.STATUS.error}:
         return False
     return not usdc_payment_received(transaction)
 
@@ -56,6 +57,7 @@ def _awaiting_usdc_payment(transaction: Transaction) -> bool:
 def _meta_display_context(meta: Sep24WithdrawMeta) -> dict:
     config = fiat_config(meta.fiat_currency)
     return {
+        "transaction_id": str(meta.transaction_id),
         "fiat_currency": meta.fiat_currency,
         "fiat_symbol": config.symbol,
         "pair_label": config.off_ramp_pair_label,
@@ -88,14 +90,14 @@ def _format_local_datetime(value) -> str:
 def _withdraw_wait_status_message(
     transaction: Transaction, meta: Sep24WithdrawMeta
 ) -> str:
+    notice = customer_message(transaction)
+    if notice:
+        return notice
     status = transaction.status
     if status == Transaction.STATUS.completed:
         return "Operación finalizada"
     if status == Transaction.STATUS.error:
-        return (
-            transaction.message
-            or "Hubo un problema con tu retiro. Escríbenos a soporte@versotek.io."
-        )
+        return "Hubo un problema con tu retiro. Escríbenos a soporte@versotek.io."
     if status == Transaction.STATUS.pending_user_transfer_start:
         return "Envía USDC a la cuenta indicada con el memo exacto."
     if not usdc_payment_received(transaction):
@@ -124,6 +126,8 @@ def _more_info_withdraw_content(
             ),
             "template_name": "polaris/more_info_withdraw_verso.html",
             "awaiting_usdc": _awaiting_usdc_payment(transaction),
+            "customer_notice": customer_message(transaction),
+            "watch_notice": True,
             "receiving_account": transaction.receiving_anchor_account or "",
             "memo": transaction.memo or "",
             "memo_type": transaction.memo_type or "",
@@ -355,7 +359,7 @@ class VersoWithdrawIntegration(WithdrawalIntegration):
 
         if transaction is not None:
             meta = Sep24WithdrawMeta.objects.filter(transaction=transaction).first()
-            if meta and meta.payout_confirmed_at:
+            if meta and (meta.payout_confirmed_at or transaction.status == Transaction.STATUS.error):
                 if template == Template.MORE_INFO:
                     return _more_info_withdraw_content(request, transaction, meta, base)
                 # Polaris POST checks content_for_template(WITHDRAW, form=None) after the

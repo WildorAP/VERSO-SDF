@@ -42,7 +42,9 @@
           return;
         }
 
-        if (payload.status !== currentStatus) {
+        var noticeChanged =
+          root.dataset.notice !== undefined && (payload.message || "") !== root.dataset.notice;
+        if (payload.status !== currentStatus || noticeChanged) {
           notifyWallet(payload.transaction);
           window.location.reload();
           return;

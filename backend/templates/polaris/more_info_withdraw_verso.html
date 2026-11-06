@@ -3,9 +3,12 @@
 
 {% block "instructions" %}
 <section class="verso-withdraw-more-info">
+    {% if customer_notice and transaction.status != "error" %}
+    <p class="didit-status" role="status">{{ customer_notice }}</p>
+    {% endif %}
     {% if awaiting_usdc %}
     <h2 class="verso-withdraw-more-info__title">Envía USDC on-chain</h2>
-    <p class="verso-withdraw-more-info__lede">
+    <p class="verso-withdraw-more-info__lede" id="wallet-pay-lede">
         Tu wallet debería firmar y enviar <strong>{{ amount_usdc }} USDC</strong> automáticamente.
         Si no ocurre en unos segundos, transfiere manualmente a la cuenta del anchor con el memo exacto.
     </p>
@@ -21,22 +24,14 @@
         </div>
     </div>
 
-    <div class="transfer-card">
-        <p class="transfer-card__eyebrow">Cuenta Stellar del anchor</p>
-        <div class="copy-field copy-field--emphasis">
-            <div class="copy-field__label">Cuenta destino (G…)</div>
-            <div class="copy-field__value copy-field__value--mono" id="receiving-account">{{ receiving_account }}</div>
-            <button type="button" class="btn-copy" data-copy-target="receiving-account">Copiar cuenta</button>
-        </div>
-        <div class="copy-field copy-field--emphasis">
-            <div class="copy-field__label">Memo ({{ memo_type }})</div>
-            <div class="copy-field__value copy-field__value--mono" id="payment-memo">{{ memo }}</div>
-            <button type="button" class="btn-copy" data-copy-target="payment-memo">Copiar memo</button>
-        </div>
-    </div>
+    {% include "sep24/onboarding/_withdraw_anchor_account.html" %}
     {% elif transaction.status == "completed" %}
     <p class="verso-withdraw-more-info__lede">
         Enviamos <strong>{{ fiat_symbol }} {{ amount_fiat }}</strong> a tu cuenta bancaria peruana.
+    </p>
+    {% elif transaction.status == "error" %}
+    <p class="verso-withdraw-more-info__lede">
+        {{ customer_notice|default:"Hubo un problema con tu retiro. Escríbenos a soporte@versotek.io." }}
     </p>
     {% else %}
     <p class="verso-withdraw-more-info__lede">
@@ -47,4 +42,19 @@
 </section>
 <link rel="stylesheet" href="{% static 'sep24/css/anchor.css' %}">
 <script src="{% static 'sep24/js/deposit_wait.js' %}"></script>
+{% endblock %}
+
+{# Actions go after the transaction details, at the end of the page. #}
+{% block "info_items" %}
+<div class="verso-compact-details">
+{{ block.super }}
+</div>
+{% if awaiting_usdc %}
+{% if not customer_notice %}{% include "sep24/onboarding/_withdraw_wallet_pay.html" %}{% endif %}
+{% elif transaction.status == "completed" or transaction.status == "error" %}
+<div id="new-operation" data-operation="withdraw">
+    <button type="button" class="btn" id="new-operation-btn">Hacer otra operación</button>
+</div>
+<script src="{% static 'sep24/js/new_operation.js' %}"></script>
+{% endif %}
 {% endblock %}

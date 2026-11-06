@@ -2,11 +2,13 @@
 SEP-1 stellar.toml content for VERSO Anchor.
 
 Polaris auto-generates endpoint URLs (WEB_AUTH_ENDPOINT, etc.)
-from ACTIVE_SEPS and HOST_URL in .env.
+from ACTIVE_SEPS and HOST_URL in .env. It builds them with os.path.join, which writes
+a backslash on Windows, so the ones VERSO serves are rebuilt here.
 """
 
 import os
 
+from polaris import settings as polaris_settings
 from stellar_sdk import Keypair
 
 from verso_integrations.turnkey_signer import turnkey_sign_with
@@ -14,6 +16,20 @@ from verso_integrations.turnkey_signer import turnkey_sign_with
 USDC_ISSUER_MAINNET = "GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN"
 USDC_ISSUER_TESTNET = "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"
 TESTNET_PASSPHRASE = "Test SDF Network ; September 2015"
+SEP_ENDPOINTS = (
+    ("sep-10", "WEB_AUTH_ENDPOINT", "auth"),
+    ("sep-24", "TRANSFER_SERVER_SEP0024", "sep24"),
+    ("sep-38", "ANCHOR_QUOTE_SERVER", "sep38"),
+)
+
+
+def _endpoint_urls() -> dict:
+    host = polaris_settings.HOST_URL.rstrip("/")
+    return {
+        key: f"{host}/{path}"
+        for sep, key, path in SEP_ENDPOINTS
+        if sep in polaris_settings.ACTIVE_SEPS
+    }
 
 
 def _usdc_issuer() -> str:
@@ -63,6 +79,7 @@ def return_toml_contents(request, *args, **kwargs):
             pass
 
     return {
+        **_endpoint_urls(),
         # Polaris adds TRANSFER_SERVER (the SEP-6 field in SEP-1) whenever SEP-24 is active.
         # SEP-6 is not implemented, so drop it (None keys are omitted from the TOML) to stop
         # wallets from offering a SEP-6 flow that returns 404. SEP-24 uses TRANSFER_SERVER_SEP0024.

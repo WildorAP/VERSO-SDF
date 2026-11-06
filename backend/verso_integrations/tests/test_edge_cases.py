@@ -427,21 +427,23 @@ class DuplicateOperatorActionTests(TestCase):
         self.account = Keypair.random().public_key
 
     def _run_action(self, model: str, action: str, pk: int):
-        return self.client.post(
-            f"/admin/verso_integrations/{model}/",
-            {"action": action, "_selected_action": [pk]},
-        )
+        button = {"mark_fiat_received": "confirm", "mark_fiat_sent": "pay"}[action]
+        return self.client.post(f"/admin/verso_integrations/{model}/{pk}/operacion/{button}/")
 
-    def test_mark_fiat_received_twice_keeps_the_first_confirmation(self):
-        tx = _usdc_transaction(Transaction.KIND.deposit, self.account)
-        meta = Sep24DepositMeta.objects.create(
+    def _deposit(self, declared: bool = True, **tx_kwargs) -> Sep24DepositMeta:
+        tx = _usdc_transaction(Transaction.KIND.deposit, self.account, **tx_kwargs)
+        return Sep24DepositMeta.objects.create(
             transaction=tx,
             amount_pen=Decimal("10.00"),
             tipo_cambio=Decimal("3.4500"),
             amount_usdc=Decimal("2.8985507"),
             sell_asset=pen_asset_identification(),
             buy_asset=usdc_asset_identification(),
+            transfer_declared_at=timezone.now() if declared else None,
         )
+
+    def test_mark_fiat_received_twice_keeps_the_first_confirmation(self):
+        meta = self._deposit()
         self._run_action("sep24depositmeta", "mark_fiat_received", meta.pk)
         meta.refresh_from_db()
         first = meta.fiat_confirmed_at
@@ -450,6 +452,31 @@ class DuplicateOperatorActionTests(TestCase):
         self._run_action("sep24depositmeta", "mark_fiat_received", meta.pk)
         meta.refresh_from_db()
         self.assertEqual(meta.fiat_confirmed_at, first)
+
+    def test_mark_fiat_received_is_refused_without_client_declaration(self):
+        """No USDC is released for a deposit the client never declared as paid."""
+        from verso_integrations.rails import VersoRailsIntegration
+
+        meta = self._deposit(declared=False)
+        response = self._run_action("sep24depositmeta", "mark_fiat_received", meta.pk)
+        meta.refresh_from_db()
+        self.assertIsNone(meta.fiat_confirmed_at)
+        self.assertContains(
+            self.client.get(response.url),
+            f"Operación #{meta.pk}: el cliente no ha declarado la transferencia.",
+        )
+        pending = Transaction.objects.filter(pk=meta.transaction_id)
+        self.assertEqual(VersoRailsIntegration().poll_pending_deposits(pending), [])
+
+    def test_mark_fiat_received_is_refused_outside_pending_user_transfer_start(self):
+        for status in (Transaction.STATUS.incomplete, Transaction.STATUS.error):
+            with self.subTest(status=status):
+                meta = self._deposit(status=status)
+                self._run_action("sep24depositmeta", "mark_fiat_received", meta.pk)
+                meta.refresh_from_db()
+                meta.transaction.refresh_from_db()
+                self.assertIsNone(meta.fiat_confirmed_at)
+                self.assertEqual(meta.transaction.status, status)
 
     def _withdrawal(self, **tx_kwargs) -> Sep24WithdrawMeta:
         tx = _usdc_transaction(

@@ -14,6 +14,7 @@ from polaris.models import Transaction
 from polaris.shared.serializers import TransactionSerializer
 from rest_framework.request import Request
 
+from verso_integrations.operations import customer_message
 from verso_integrations.root import stellar_expert_tx_url
 
 TERMINAL_TRANSACTION_STATUSES = frozenset(
@@ -75,7 +76,7 @@ def transaction_poll(request: HttpRequest) -> JsonResponse:
     return JsonResponse(
         {
             "status": str(transaction.status),
-            "message": transaction.message or "",
+            "message": customer_message(transaction) or "",
             "completed_at": (
                 transaction.completed_at.isoformat() if transaction.completed_at else None
             ),

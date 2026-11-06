@@ -1,0 +1,6 @@
+{% load static %}
+<div id="wallet-pay" class="is-hidden" data-transaction-id="{{ transaction_id }}">
+    <button type="button" class="btn" id="wallet-pay-btn">Firmar y enviar pago</button>
+    <p id="wallet-pay-status" class="didit-status is-hidden" role="status"></p>
+</div>
+<script src="{% static 'sep24/js/withdraw_wallet_pay.js' %}"></script>

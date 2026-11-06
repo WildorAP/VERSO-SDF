@@ -3,10 +3,7 @@
     button.addEventListener("click", function () {
       var targetId = button.getAttribute("data-copy-target");
       var target = targetId ? document.getElementById(targetId) : null;
-      if (!target) {
-        return;
-      }
-      var text = target.textContent.trim();
+      var text = button.getAttribute("data-copy-value") || (target ? target.textContent.trim() : "");
       if (!text) {
         return;
       }

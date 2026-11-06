@@ -80,6 +80,9 @@
     reveal(completedDateRow);
     showTxid(payload.stellar_transaction_id, payload.stellar_tx_url);
     notifyWallet(payload.transaction);
+    if (window.versoRevealNewOperation) {
+      window.versoRevealNewOperation();
+    }
     stopPolling();
   }
 
@@ -90,6 +93,9 @@
         "Hubo un problema con tu retiro. Escríbenos a soporte@versotek.io.";
       statusEl.classList.add("didit-status--error");
       statusEl.classList.remove("didit-status--success");
+    }
+    if (window.versoRevealNewOperation) {
+      window.versoRevealNewOperation();
     }
     stopPolling();
   }
@@ -125,7 +131,7 @@
           return;
         }
 
-        var message = STATUS_MESSAGES[payload.status] || "Procesando retiro…";
+        var message = payload.message || STATUS_MESSAGES[payload.status] || "Procesando retiro…";
         if (statusEl && statusEl.textContent !== message) {
           statusEl.textContent = message;
         }
