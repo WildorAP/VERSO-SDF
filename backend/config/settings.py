@@ -214,3 +214,7 @@ RECON_CLOUDWATCH_NAMESPACE = env(
 )
 RECON_ENV = env("RECON_ENV", default="testnet")
 RECON_SNS_TOPIC_ARN = env("RECON_SNS_TOPIC_ARN", default="")
+
+# Historial unificado — el servicio SYNC envía a VERSO las operaciones SEP-24
+# (comando sync_history_to_verso). Segundos entre barridos.
+VERSO_HISTORY_SYNC_INTERVAL_SECONDS = env.int("VERSO_HISTORY_SYNC_INTERVAL_SECONDS", default=15)

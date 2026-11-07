@@ -254,3 +254,48 @@ class FiatDeposit(models.Model):
     def save(self, *args, **kwargs):
         self.amount_usdc = compute_amount_usdc(self.amount_pen, self.tipo_cambio)
         super().save(*args, **kwargs)
+
+
+class VersoHistorySync(models.Model):
+    """
+    Control de la sincronización de cada operación SEP-24 con el historial de VERSO.
+
+    Lo escribe solo el comando ``sync_history_to_verso`` (servicio SYNC). Guarda la huella
+    del último envío aceptado para no reenviar lo que no cambió, y el último error para
+    reintentar con espera sin perder ninguna operación.
+    """
+
+    class Result(models.TextChoices):
+        SYNCED = "synced", "Sincronizada"
+        RETRYING = "retrying", "Reintentando (error temporal)"
+        NOT_LINKED = "not_linked", "Wallet no vinculada en VERSO"
+        REJECTED = "rejected", "Rechazada por VERSO"
+
+    transaction = models.OneToOneField(
+        "polaris.Transaction",
+        on_delete=models.CASCADE,
+        related_name="verso_history_sync",
+    )
+    result = models.CharField(max_length=16, choices=Result.choices, blank=True, default="", db_index=True)
+    payload_hash = models.CharField(
+        max_length=64, blank=True, default="", help_text="Huella del último envío aceptado por VERSO."
+    )
+    attempted_hash = models.CharField(
+        max_length=64, blank=True, default="", help_text="Huella del último intento (exitoso o no)."
+    )
+    sent_status = models.CharField(
+        max_length=64, blank=True, default="", help_text="Estado Polaris del último envío aceptado."
+    )
+    verso_transaccion_id = models.PositiveIntegerField(null=True, blank=True)
+    attempts = models.PositiveIntegerField(default=0, help_text="Intentos fallidos consecutivos.")
+    last_error = models.TextField(blank=True, default="")
+    last_attempt_at = models.DateTimeField(null=True, blank=True)
+    synced_at = models.DateTimeField(null=True, blank=True)
+    next_attempt_at = models.DateTimeField(null=True, blank=True, db_index=True)
+
+    class Meta:
+        verbose_name = "sincronización con VERSO"
+        verbose_name_plural = "sincronización con VERSO (historial)"
+
+    def __str__(self) -> str:
+        return f"{self.transaction_id} — {self.get_result_display() or 'pendiente'}"

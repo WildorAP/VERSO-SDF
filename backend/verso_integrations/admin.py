@@ -1,7 +1,7 @@
 from django.contrib import admin, messages
 from polaris.models import Transaction
 
-from verso_integrations.models import Sep24DepositMeta, Sep24WithdrawMeta
+from verso_integrations.models import Sep24DepositMeta, Sep24WithdrawMeta, VersoHistorySync
 
 
 @admin.register(Sep24DepositMeta)
@@ -135,3 +135,34 @@ class Sep24WithdrawMetaAdmin(admin.ModelAdmin):
                 f"{repaired} withdrawal(s) re-synced to completed (fiat was already marked sent).",
                 level=messages.SUCCESS,
             )
+
+
+@admin.register(VersoHistorySync)
+class VersoHistorySyncAdmin(admin.ModelAdmin):
+    """Estado de la sincronización del historial con VERSO (solo lectura)."""
+
+    list_display = (
+        "transaction",
+        "result",
+        "sent_status",
+        "attempts",
+        "last_attempt_at",
+        "synced_at",
+        "next_attempt_at",
+    )
+    list_filter = ("result",)
+    search_fields = ("transaction__id", "transaction__stellar_account", "last_error")
+    readonly_fields = [field.name for field in VersoHistorySync._meta.fields]
+    actions = ("retry_now",)
+
+    def has_add_permission(self, request):
+        return False
+
+    @admin.action(description="Reintentar ahora (reenviar en el próximo barrido)")
+    def retry_now(self, request, queryset):
+        updated = queryset.update(payload_hash="", attempted_hash="", next_attempt_at=None)
+        self.message_user(
+            request,
+            f"{updated} operación(es) se reenviarán a VERSO en el próximo barrido.",
+            level=messages.SUCCESS,
+        )

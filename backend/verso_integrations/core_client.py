@@ -307,3 +307,39 @@ def sync_kyc(*, user_id: int) -> UserStatusResult:
         )
 
     return _parse_user_status(response.json())
+
+
+@dataclass(frozen=True)
+class SyncResponse:
+    """Respuesta de VERSO al sincronizar una operación del historial."""
+
+    status_code: int
+    payload: dict
+
+
+def sync_anchor_transaction(payload: dict, *, timeout: float = 10) -> SyncResponse:
+    """
+    Envía el estado actual de una operación SEP-24 al historial de VERSO
+    (``POST /internal/anchor/transactions/``, idempotente del lado de VERSO).
+
+    Devuelve el código y el cuerpo para que el llamador clasifique el resultado.
+    Lanza ``CoreClientError`` si no hay credenciales o si la red falla.
+    Las redirecciones no se siguen: un 3xx indica ``VERSO_CORE_API_URL`` mal configurada
+    (por ejemplo http:// en vez de https://), y seguirla convertiría el POST en GET.
+    """
+    try:
+        response = requests.post(
+            f"{_base_url()}/internal/anchor/transactions/",
+            headers=_internal_headers(),
+            json=payload,
+            timeout=timeout,
+            allow_redirects=False,
+        )
+    except requests.RequestException as exc:
+        raise CoreClientError(f"Failed to sync transaction with VERSO Core: {exc}") from exc
+
+    try:
+        body = response.json() if response.content else {}
+    except ValueError:
+        body = {}
+    return SyncResponse(status_code=response.status_code, payload=body if isinstance(body, dict) else {})
