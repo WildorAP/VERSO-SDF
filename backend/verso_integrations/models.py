@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
@@ -254,6 +255,70 @@ class FiatDeposit(models.Model):
     def save(self, *args, **kwargs):
         self.amount_usdc = compute_amount_usdc(self.amount_pen, self.tipo_cambio)
         super().save(*args, **kwargs)
+
+
+class OperationRejection(models.Model):
+    """An operator closed the operation; if funds arrived, they are still owed until refunded."""
+
+    class Reason(models.TextChoices):
+        CLIENT_WITHDREW = "client_withdrew", "Cliente desistió"
+        AMOUNT_MISMATCH = "amount_mismatch", "Monto distinto"
+        THIRD_PARTY = "third_party", "Cuenta de otro titular"
+        COMPLIANCE = "compliance", "Revisión de cumplimiento"
+        OTHER = "other", "Otro"
+
+    transaction = models.OneToOneField(
+        "polaris.Transaction",
+        on_delete=models.PROTECT,
+        related_name="verso_rejection",
+    )
+    reason = models.CharField(max_length=32, choices=Reason.choices)
+    note = models.TextField(blank=True)
+    funds_received = models.BooleanField(default=False)
+    rejected_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    refund_amount = models.DecimalField(max_digits=30, decimal_places=7, null=True, blank=True)
+    refund_reference = models.CharField(max_length=128, blank=True)
+    refunded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    refunded_at = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self) -> str:
+        return f"Rechazo de {self.transaction_id}"
+
+
+class OperationHold(models.Model):
+    """A pause while an operator reviews the operation; several may exist, only one active."""
+
+    transaction = models.ForeignKey(
+        "polaris.Transaction",
+        on_delete=models.PROTECT,
+        related_name="verso_holds",
+    )
+    note = models.TextField()
+    placed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    placed_at = models.DateTimeField(auto_now_add=True)
+    released_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    released_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["transaction"],
+                condition=models.Q(released_at__isnull=True),
+                name="one_active_hold_per_transaction",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"Retención de {self.transaction_id}"
 
 
 class VersoHistorySync(models.Model):

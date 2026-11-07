@@ -1,3 +1,5 @@
+import ntpath
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from django.test import TestCase, override_settings
@@ -69,3 +71,14 @@ class Sep1TomlHttpTests(TestCase):
         lines = [line.split("=")[0].strip() for line in response.content.decode().splitlines()]
         self.assertIn("TRANSFER_SERVER_SEP0024", lines)
         self.assertNotIn("TRANSFER_SERVER", lines)
+
+    @patch("polaris.settings.HOST_URL", "http://localhost:8000")
+    @patch("polaris.sep1.views.os", SimpleNamespace(path=ntpath))
+    def test_stellar_toml_urls_use_forward_slashes_on_windows(self):
+        response = self.client.get("/.well-known/stellar.toml")
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode()
+        self.assertIn('TRANSFER_SERVER_SEP0024 = "http://localhost:8000/sep24"', content)
+        self.assertIn('WEB_AUTH_ENDPOINT = "http://localhost:8000/auth"', content)
+        self.assertIn('ANCHOR_QUOTE_SERVER = "http://localhost:8000/sep38"', content)
+        self.assertNotIn("\\", content)

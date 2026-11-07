@@ -53,6 +53,8 @@ from verso_integrations.sep24.kyc_gate import (
     sync_deposit_fiat_currency_from_request,
     sync_kyc_from_core,
 )
+from verso_integrations.operations import customer_message
+from verso_integrations.sep24.onboarding_flow import OPEN_OPERATION_MESSAGE
 from verso_integrations.sep24.onboarding_forms import (
     DiditPromptForm,
     KycStatusForm,
@@ -125,14 +127,14 @@ def _format_local_datetime(value) -> str:
 def _deposit_wait_status_message(
     transaction: Transaction, meta: Sep24DepositMeta
 ) -> str:
+    notice = customer_message(transaction)
+    if notice:
+        return notice
     status = transaction.status
     if status == Transaction.STATUS.completed:
         return "Operación finalizada"
     if status == Transaction.STATUS.error:
-        return (
-            transaction.message
-            or "Hubo un problema con tu depósito. Escríbenos a soporte@versotek.io."
-        )
+        return "Hubo un problema con tu depósito. Escríbenos a soporte@versotek.io."
     if (
         meta.fiat_confirmed_at
         and status == Transaction.STATUS.pending_user_transfer_start
@@ -218,7 +220,7 @@ class VersoDepositIntegration(DepositIntegration):
             if post_data is not None:
                 return VersoProfileForm(post_data, **form_kwargs)
             return VersoProfileForm(**form_kwargs)
-        if step in {"didit", "pending", "rejected"}:
+        if step in {"didit", "pending", "rejected", "open_operation"}:
             if post_data is not None:
                 return KycStatusForm(post_data)
             return KycStatusForm()
@@ -433,7 +435,11 @@ class VersoDepositIntegration(DepositIntegration):
         if transaction is not None:
             meta = Sep24DepositMeta.objects.filter(transaction=transaction).first()
             if meta:
-                if meta.transfer_declared_at or meta.fiat_confirmed_at:
+                if (
+                    meta.transfer_declared_at
+                    or meta.fiat_confirmed_at
+                    or transaction.status == Transaction.STATUS.error
+                ):
                     if template in {Template.MORE_INFO, Template.DEPOSIT}:
                         return _deposit_waiting_content(request, transaction, meta, base)
                 elif form is None and template == Template.DEPOSIT:
@@ -487,7 +493,10 @@ class VersoDepositIntegration(DepositIntegration):
 
         if isinstance(form, KycStatusForm):
             step = onboarding_step(request, transaction)
-            if step == "pending":
+            if step == "open_operation":
+                base["title"] = "Tienes una operación en curso"
+                base["guidance"] = OPEN_OPERATION_MESSAGE
+            elif step == "pending":
                 base["title"] = "Verificación en revisión"
                 base["guidance"] = (
                     "Aún no tienes acceso para operar. Tu KYC está pendiente de aprobación."

@@ -281,16 +281,69 @@ def lookup_client_kyc(stellar_public_key: str, *, request=None, transaction_id=N
         synced = sync_kyc_from_core(request, transaction_id)
         if synced is not None:
             return synced
+        if sync_kyc_from_linked_wallet(request, transaction_id, stellar_public_key):
+            return ClientKycStatus(status=KYC_APPROVED)
 
     return ClientKycStatus(status=KYC_NOT_FOUND)
+
+
+def sync_kyc_from_linked_wallet(request, transaction_id, stellar_public_key: str) -> bool:
+    """
+    Skip the VERSO login when the SEP-10 wallet is already linked to a KYC-approved user.
+
+    The SEP-10 signature proves control of the wallet, and the wallet was linked to the VERSO
+    account through a password login, so the login inside the webview is not repeated.
+    Wallets that are not linked yet still go through login (that is where the link happens).
+    """
+    try:
+        status = user_status(stellar_public_key=stellar_public_key)
+    except CoreClientError:
+        return False
+    if not (
+        status.active
+        and status.kyc_completed
+        and status.stellar_linked
+        and status.stellar_public_key == stellar_public_key
+    ):
+        return False
+    apply_verso_user_session(request, transaction_id, status)
+    return True
+
+
+def find_open_operation(transaction):
+    """
+    Another SEP-24 operation of the same wallet that reached the amount step and has not finished.
+
+    Abandoned webviews (no amount entered, so no VERSO metadata) never block a new operation.
+    """
+    from django.db.models import Q
+    from polaris.models import Transaction
+
+    from verso_integrations.sep24.transaction_views import TERMINAL_TRANSACTION_STATUSES
+
+    return (
+        Transaction.objects.filter(
+            stellar_account=transaction.stellar_account,
+            protocol=Transaction.PROTOCOL.sep24,
+        )
+        .filter(Q(verso_deposit_meta__isnull=False) | Q(verso_withdraw_meta__isnull=False))
+        .exclude(pk=transaction.pk)
+        .exclude(status__in=TERMINAL_TRANSACTION_STATUSES)
+        .order_by("-started_at")
+        .first()
+    )
 
 
 def onboarding_step(request, transaction) -> str:
     """
     Next onboarding step inside the SEP-24 webview.
 
-    Returns one of: login | register | deposit | withdraw | verify_email | profile | didit | pending | rejected
+    Returns one of: open_operation | login | register | deposit | withdraw | verify_email | profile
+    | didit | pending | rejected
     """
+    if find_open_operation(transaction) is not None:
+        return "open_operation"
+
     kyc = lookup_client_kyc(
         transaction.stellar_account,
         request=request,

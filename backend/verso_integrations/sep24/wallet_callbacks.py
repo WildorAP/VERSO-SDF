@@ -13,15 +13,21 @@ every redirect back to webapp or more_info.
 
 from __future__ import annotations
 
-from urllib.parse import urlencode
+import re
+from urllib.parse import urlencode, urlsplit
 
 from django.http import HttpRequest
+from polaris import settings as polaris_settings
 from polaris.models import Transaction
 from rest_framework.request import Request as DrfRequest
 
 CALLBACK_SESSION_PREFIX = "sep24_wallet_callback"
 ON_CHANGE_SESSION_PREFIX = "sep24_wallet_on_change"
 POSTMESSAGE_CALLBACK = "postMessage"
+CALLBACK_PARAMS = ("callback", "on_change_callback")
+# Polaris writes ``callback`` unescaped inside a <script> in more_info.html, and Django's
+# URLValidator accepts quotes, so only characters that cannot break out of it are allowed.
+SAFE_CALLBACK_URL = re.compile(r"[A-Za-z0-9\-._~:/?#@!$&*+,=%]+")
 
 
 def _session_key(prefix: str, transaction_id: str) -> str:
@@ -34,20 +40,61 @@ def _infer_postmessage_callback(on_change: str | None) -> str | None:
     return None
 
 
+def is_safe_wallet_callback(value: str) -> bool:
+    """True for ``postMessage``, Polaris' ``success`` marker, or a URL safe to write into a script."""
+    if value.lower() in {"postmessage", "success"}:
+        return True
+    if not SAFE_CALLBACK_URL.fullmatch(value):
+        return False
+    try:
+        parts = urlsplit(value)
+    except ValueError:
+        return False
+    schemes = {"https", "http"} if polaris_settings.LOCAL_MODE else {"https"}
+    return parts.scheme in schemes and bool(parts.hostname)
+
+
+def _safe_callback(value: str | None) -> str | None:
+    return value if value and is_safe_wallet_callback(value) else None
+
+
+def drop_unsafe_wallet_callbacks(request: DrfRequest | HttpRequest) -> None:
+    """Remove callback params that are not safe from the query before Polaris renders them."""
+    django_request = request._request if isinstance(request, DrfRequest) else request
+    unsafe = [
+        param
+        for param in CALLBACK_PARAMS
+        if any(not is_safe_wallet_callback(value) for value in django_request.GET.getlist(param))
+    ]
+    if unsafe:
+        query = django_request.GET.copy()
+        for param in unsafe:
+            del query[param]
+        django_request.GET = query
+
+
 def _sync_on_change_callback(transaction_id: str, on_change: str) -> None:
+    """
+    Mark a transaction without callback as postMessage.
+
+    These pages are reachable with only the transaction ID, so they never store a URL or replace
+    a value: callback URLs come from the wallet's SEP-10 authenticated request, through Polaris.
+    """
+    if on_change.lower() != "postmessage":
+        return
     try:
         transaction = Transaction.objects.get(id=transaction_id)
     except Transaction.DoesNotExist:
         return
-    if transaction.on_change_callback != on_change:
+    if not transaction.on_change_callback:
         transaction.on_change_callback = on_change
         transaction.save(update_fields=["on_change_callback"])
 
 
 def persist_sep24_wallet_callbacks(request: HttpRequest, transaction_id: str) -> None:
     """Save callback params from the query string into the webview session."""
-    callback = request.GET.get("callback")
-    on_change = request.GET.get("on_change_callback")
+    callback = _safe_callback(request.GET.get("callback"))
+    on_change = _safe_callback(request.GET.get("on_change_callback"))
     if not callback:
         callback = _infer_postmessage_callback(on_change)
     if callback:
@@ -82,11 +129,13 @@ def sep24_wallet_callback_query(
     meta=None,
 ) -> dict[str, str]:
     """Return callback params from the request, session, transaction, or SEP-24 defaults."""
-    callback = request.GET.get("callback") or request.session.get(
-        _session_key(CALLBACK_SESSION_PREFIX, transaction_id)
+    callback = _safe_callback(
+        request.GET.get("callback")
+        or request.session.get(_session_key(CALLBACK_SESSION_PREFIX, transaction_id))
     )
-    on_change = request.GET.get("on_change_callback") or request.session.get(
-        _session_key(ON_CHANGE_SESSION_PREFIX, transaction_id)
+    on_change = _safe_callback(
+        request.GET.get("on_change_callback")
+        or request.session.get(_session_key(ON_CHANGE_SESSION_PREFIX, transaction_id))
     )
     if transaction is not None:
         persisted_on_change = (transaction.on_change_callback or "").strip()

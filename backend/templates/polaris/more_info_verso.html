@@ -9,6 +9,7 @@
   hidden
   data-poll-url="{{ poll_url }}"
   data-status="{{ transaction.status }}"
+  {% if watch_notice %}data-notice="{{ customer_notice|default:'' }}"{% endif %}
   data-on-change="{{ transaction.on_change_callback|default:'' }}"
 ></div>
 <script defer src="{% static 'sep24/js/more_info_poll.js' %}"></script>

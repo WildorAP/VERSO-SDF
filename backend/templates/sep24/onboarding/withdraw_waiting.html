@@ -78,9 +78,22 @@
     >
         {{ status_message }}
     </p>
+
+    {% if transaction_status == "pending_user_transfer_start" %}
+    {% include "sep24/onboarding/_withdraw_wallet_pay.html" %}
+    {% endif %}
+
+    <div
+        id="new-operation"
+        class="{% if transaction_status != 'completed' and transaction_status != 'error' %}is-hidden{% endif %}"
+        data-operation="withdraw"
+    >
+        <button type="button" class="btn" id="new-operation-btn">Hacer otra operación</button>
+    </div>
 {% endblock %}
 
 {% block extra_scripts %}
+<script src="{% static 'sep24/js/new_operation.js' %}"></script>
 {% if poll_enabled %}
 <div
     id="withdraw-wait-poll-root"

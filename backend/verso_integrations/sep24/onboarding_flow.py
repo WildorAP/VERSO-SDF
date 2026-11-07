@@ -36,6 +36,12 @@ from verso_integrations.sep24.onboarding_forms import (
 )
 
 
+OPEN_OPERATION_MESSAGE = (
+    "Termina tu operación anterior antes de iniciar una nueva. "
+    "Si necesitas ayuda, escríbenos a soporte@versotek.io."
+)
+
+
 def operate_step_for_transaction(transaction: Transaction) -> str:
     if transaction.kind == Transaction.KIND.withdrawal:
         return "withdraw"
@@ -77,7 +83,7 @@ def form_for_onboarding_step(
         if post_data is not None:
             return VersoProfileForm(post_data, **form_kwargs)
         return VersoProfileForm(**form_kwargs)
-    if step in {"didit", "pending", "rejected"}:
+    if step in {"didit", "pending", "rejected", "open_operation"}:
         if post_data is not None:
             return KycStatusForm(post_data)
         return KycStatusForm()
@@ -166,7 +172,10 @@ def content_for_onboarding_form(
 
     if isinstance(form, KycStatusForm):
         step = onboarding_step(request, transaction)
-        if step == "pending":
+        if step == "open_operation":
+            base["title"] = "Tienes una operación en curso"
+            base["guidance"] = OPEN_OPERATION_MESSAGE
+        elif step == "pending":
             base["title"] = "Verificación en revisión"
             base["guidance"] = (
                 "Aún no tienes acceso para operar. Tu KYC está pendiente de aprobación."

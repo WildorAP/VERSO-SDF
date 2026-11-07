@@ -62,6 +62,27 @@ class CoreClientTests(TestCase):
         self.assertEqual(result.user_id, 3)
         self.assertTrue(result.kyc_completed)
 
+    @patch("verso_integrations.core_client.requests.get")
+    def test_user_status_by_stellar_public_key(self, mock_get):
+        mock_get.return_value = MagicMock(
+            status_code=200,
+            json=lambda: {
+                "registered": True,
+                "user_id": 3,
+                "email": "a@b.com",
+                "kyc_completed": True,
+                "stellar_linked": True,
+                "stellar_public_key": "GTEST",
+            },
+        )
+        result = user_status(stellar_public_key="GTEST")
+        self.assertEqual(mock_get.call_args.kwargs["params"], {"stellar_public_key": "GTEST"})
+        self.assertEqual(result.stellar_public_key, "GTEST")
+
+    def test_user_status_requires_email_or_wallet(self):
+        with self.assertRaises(CoreClientError):
+            user_status()
+
     @patch("verso_integrations.core_client.requests.post")
     def test_register_user_success(self, mock_post):
         mock_post.return_value = MagicMock(status_code=201, json=lambda: {"user_id": 5, "email": "a@b.com"})

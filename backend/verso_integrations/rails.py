@@ -10,6 +10,7 @@ from polaris.integrations import RailsIntegration
 from polaris.models import Transaction
 
 from verso_integrations.models import Sep24DepositMeta, Sep24WithdrawMeta
+from verso_integrations.operation_status import active_hold_of
 from verso_integrations.withdraw import compute_amount_fiat, finalize_sep24_withdrawal
 
 
@@ -28,7 +29,7 @@ class VersoRailsIntegration(RailsIntegration):
             except Sep24DepositMeta.DoesNotExist:
                 continue
 
-            if meta.fiat_confirmed_at is None:
+            if meta.fiat_confirmed_at is None or active_hold_of(transaction):
                 continue
 
             transaction.amount_in = meta.amount_pen
