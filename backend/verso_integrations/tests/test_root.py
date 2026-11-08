@@ -13,7 +13,7 @@ class RootViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("text/html", response["Content-Type"])
         self.assertContains(response, "Stellar Anchor")
-        self.assertContains(response, "Qué viene en cada tranche")
+        self.assertContains(response, "Qué incluye cada tranche")
         self.assertContains(response, "T1")
 
     @patch.dict("os.environ", {"ACTIVE_SEPS": "sep-1,sep-10"})
@@ -31,7 +31,7 @@ class RootViewTests(TestCase):
         self.assertEqual(data["tranches"][0]["id"], "T1")
         self.assertEqual(data["tranches"][0]["status"], "done")
         self.assertEqual(data["tranches"][1]["status"], "done")
-        self.assertEqual(data["tranches"][2]["status"], "in_progress")
+        self.assertEqual(data["tranches"][2]["status"], "done")
         self.assertEqual(len(data["endpoints"]), 3)
 
     @patch.dict("os.environ", {"ACTIVE_SEPS": "sep-1,sep-10,sep-38", "HOST_URL": "http://localhost:8000"})
@@ -41,7 +41,28 @@ class RootViewTests(TestCase):
 
         sep38 = [item for item in data["endpoints"] if item.get("sep") == "SEP-38"]
         self.assertEqual(len(sep38), 1)
-        self.assertEqual(sep38[0]["url"], "http://localhost:8000/sep38")
+        self.assertEqual(sep38[0]["url"], "http://localhost:8000/sep38/info")
+
+    @patch.dict(
+        "os.environ",
+        {
+            "ACTIVE_SEPS": "sep-1,sep-10,sep-38,sep-24",
+            "HOST_URL": "http://localhost:8000",
+            "TURNKEY_SIGN_WITH": "GCYWYXFOWGOXOLUI6ZXBSMMRRK4KJUUVHBBSPMM6XAEOAX2YU5KZNJMM",
+        },
+    )
+    def test_root_links_point_to_pages_that_answer(self):
+        """/sep24 and /sep38 are base paths and /auth needs ?account=, so they would answer 404/400."""
+        data = json.loads(self.client.get("/?format=json").content)
+        urls = {item["sep"]: item["url"] for item in data["endpoints"]}
+
+        self.assertEqual(urls["SEP-24"], "http://localhost:8000/sep24/info")
+        self.assertEqual(
+            urls["SEP-10"],
+            "http://localhost:8000/auth?account=GCYWYXFOWGOXOLUI6ZXBSMMRRK4KJUUVHBBSPMM6XAEOAX2YU5KZNJMM",
+        )
+        for url in urls.values():
+            self.assertNotRegex(url, r"/(sep24|sep38|auth)$")
 
     def test_root_returns_json_when_accept_header_requests_it(self):
         response = self.client.get("/", HTTP_ACCEPT="application/json")

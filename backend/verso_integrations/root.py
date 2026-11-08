@@ -61,6 +61,9 @@ def build_root_payload() -> dict:
         f"{explorer}/account/{anchor_account}" if anchor_account else explorer
     )
 
+    # Every link must answer 200: /sep24 and /sep38 are base paths (wallets append /info,
+    # /price, ...) and /auth needs ?account=, so the links point to a page that responds.
+    auth_path = f"/auth?account={anchor_account}" if anchor_account else "/auth"
     endpoints = [
         {
             "label": "stellar.toml",
@@ -71,8 +74,8 @@ def build_root_payload() -> dict:
         {
             "label": "Wallet auth",
             "sep": "SEP-10",
-            "path": "/auth",
-            "url": f"{host}/auth",
+            "path": "/auth?account=G…" if anchor_account else "/auth",
+            "url": f"{host}{auth_path}",
         },
     ]
     if "sep-38" in _active_seps():
@@ -80,8 +83,8 @@ def build_root_payload() -> dict:
             {
                 "label": "Quote server (PEN/USD ↔ USDC)",
                 "sep": "SEP-38",
-                "path": "/sep38",
-                "url": f"{host}/sep38",
+                "path": "/sep38/info",
+                "url": f"{host}/sep38/info",
             }
         )
     if "sep-24" in _active_seps():
@@ -89,8 +92,8 @@ def build_root_payload() -> dict:
             {
                 "label": "Interactive deposit & withdrawal (PEN/USD ↔ USDC)",
                 "sep": "SEP-24",
-                "path": "/sep24",
-                "url": f"{host}/sep24",
+                "path": "/sep24/info",
+                "url": f"{host}/sep24/info",
             }
         )
     endpoints.append(
@@ -131,9 +134,12 @@ def build_root_payload() -> dict:
             {
                 "id": "T3",
                 "seps": ["Mainnet"],
-                "status": "in_progress",
-                "status_label": "En curso",
-                "scope": "operación en mainnet con USDC real, custodia Turnkey y liquidación CCI/CCE",
+                "status": "done",
+                "status_label": "Completado",
+                "scope": (
+                    "en vivo en mainnet desde el 16/10/2026: SEP-1/10/24/38 con USDC real, custodia Turnkey, "
+                    "liquidación CCI/CCE y conciliación on-chain; 30 operaciones reales verificables en Stellar Expert"
+                ),
             },
         ],
         "endpoints": endpoints,

@@ -33,6 +33,7 @@ flowchart LR
         DEP["Deposit worker<br/>pays USDC (on-ramp)"]
         WIT["Withdrawal worker<br/>detects inbound USDC (off-ramp)"]
         REC["Reconciliation worker<br/>ledger vs. on-chain balance"]
+        SYN["History sync worker<br/>operations → VERSO history"]
         DB[("PostgreSQL")]
         RD[("Redis")]
     end
@@ -58,6 +59,8 @@ flowchart LR
     DEP --> DB
     WIT --> DB
     REC --> DB
+    SYN --> DB
+    SYN -- "operation status (idempotent)" --> CORE
     DEP -- "sign payout hash" --> TK
     DEP -- "submit payment" --> HZ
     WIT -- "payment stream" --> HZ
@@ -71,13 +74,14 @@ flowchart LR
 
 | Component | Role | Notes |
 | --- | --- | --- |
-| **Web service** | Serves SEP-1/10/24/38, the SEP-24 interactive webview (VERSO login, KYC gate, amount, bank details) and the operator admin | Only component with a public URL. Runs database migrations on deploy |
-| **Deposit worker** | Polaris `process_pending_deposits --loop`: once operations confirm the fiat was received, builds the USDC payment and gets it signed by Turnkey | The only component holding signing credentials (Turnkey API credential, not a private key) |
+| **Web service** | Serves SEP-1/10/24/38, the SEP-24 interactive webview (VERSO login, KYC gate, amount, bank details) and the operator admin (per-operation actions: confirm, mark paid, reject, hold, register refund) | Only component with a public URL. Runs database migrations on deploy |
+| **Deposit worker** | Polaris `process_pending_deposits`: once operations confirm the fiat was received, builds the USDC payment and gets it signed by Turnkey. Skips deposits on hold | The only component holding signing credentials (Turnkey API credential, not a private key) |
 | **Withdrawal worker** | Polaris `watch_transactions`: streams payments into the hot wallet and matches each one to its SEP-24 withdrawal by memo | Resumes from its stored cursor after a restart |
 | **Reconciliation worker** | Ingests every USDC movement of the hot wallet through Stellar RPC `getEvents`, matches it to its SEP-24 transaction and compares the on-chain balance with the internal ledger every ~60 s | Publishes metrics; alarms notify operations by email |
-| **PostgreSQL** | Polaris transactions, VERSO deposit/withdrawal metadata, reconciliation ledger and runs | Mainnet and testnet use separate databases |
+| **History sync worker** | `sync_history_to_verso --loop`: every ~15 s sends each SEP-24 operation whose state changed to the client's history in VERSO Core | Read-only on Polaris data; writes only its own control table. One replica. A VERSO outage never blocks payouts |
+| **PostgreSQL** | Polaris transactions, VERSO deposit/withdrawal metadata, operator rejections and holds, history sync state, reconciliation ledger and runs | Mainnet and testnet use separate databases |
 | **Redis** | Cache and webview sessions | — |
-| **VERSO Core** | VERSO's main platform: client accounts, KYC status, live exchange rates (`rate_venta` / `rate_compra`) | Called server-to-server with a shared secret; never exposed to wallets |
+| **VERSO Core** | VERSO's main platform: client accounts and linked wallets, KYC status, live exchange rates (`rate_venta` / `rate_compra`), client operation history | Called server-to-server with a shared secret; never exposed to wallets |
 | **DIDIT** | Identity verification (KYC) | Launched from the webview when the client has no approved KYC |
 | **Turnkey** | Holds the hot wallet's Ed25519 key in a secure enclave and signs payouts | See [Keys and custody](#keys-and-custody) |
 
@@ -102,10 +106,10 @@ Background on why Turnkey replaced AWS KMS (KMS does not sign Ed25519): README �
 
 | Boundary | Who is trusted | Control |
 | --- | --- | --- |
-| Wallet → anchor | Nobody by default | SEP-10 proves account ownership; the SEP-24 webview additionally requires a VERSO login and **approved KYC** before any amount can be entered |
+| Wallet → anchor | Nobody by default | SEP-10 proves account ownership; the SEP-24 webview additionally requires a VERSO account with **approved KYC** before any amount can be entered (a password login, or a wallet already linked to that account through one). Wallet callback parameters are filtered before they reach any page, and a page reachable with only a transaction ID cannot change a transaction's callback |
 | Anchor → VERSO Core | The anchor server only | Shared secret over HTTPS; wallets never call Core's internal API |
 | Anchor → Turnkey | Service user with a single-wallet policy | Signatures verified locally; payout cap in code |
-| Fiat ↔ USDC | VERSO operations | Fiat receipt and fiat payout are **confirmed by a person** in the admin (PSAV obligations); a withdrawal cannot be completed until its USDC payment is detected on-chain |
+| Fiat ↔ USDC | VERSO operations | Fiat receipt and fiat payout are **confirmed by a person** in the admin (PSAV obligations); a withdrawal cannot be completed until its USDC payment is detected on-chain. Each action is checked against the operation's stage under a row lock; an operation can be held (no payout) or rejected, and records are never deleted |
 | On-chain ↔ internal ledger | Nobody | Independent reconciliation over Stellar RPC every ~60 s, with alarms |
 
 ## Data flows
@@ -130,7 +134,7 @@ sequenceDiagram
     A->>C: KYC status + live rate_venta
     A-->>W: amount → quote (fiat in, USDC out) + VERSO CCI instructions
     Note over W,A: Client transfers PEN/USD by CCI/CCE and uploads the receipt
-    O->>A: verify bank credit → "Mark fiat received"
+    O->>A: verify bank credit → "Confirm and send"
     D->>A: poll_pending_deposits returns the transaction
     D->>T: sign payment hash
     T-->>D: Ed25519 signature (verified locally)
@@ -159,7 +163,7 @@ sequenceDiagram
     W->>S: USDC payment to hot wallet with memo
     R->>S: payment stream
     R->>A: match by memo → USDC received
-    O->>A: pay fiat by CCI/CCE → "Mark fiat sent"
+    O->>A: pay fiat by CCI/CCE → "Mark paid"
     A-->>W: transaction completed
 ```
 
@@ -171,6 +175,13 @@ trustline balance at a known ledger (`getLedgerEntries`) and compares it with
 `opening balance + sum of stored movements` at that same ledger. Movements are matched to their SEP-24 transaction;
 anything unexplained (unknown inbound/outbound, amount mismatch, balance delta, stalled ingest) opens a discrepancy and
 raises an alarm. Details: README → *Tranche 2, Deliverable 3* and *Architecture note*, point 4.
+
+### History sync
+
+Every ~15 s the history sync worker reads the SEP-24 operations that reached the amount step, builds each one's
+current state and its fingerprint, and posts only the ones that changed to VERSO Core (idempotent per anchor
+transaction ID). Temporary errors are retried with back-off; wallets not linked to a VERSO user and data refused by
+VERSO are retried hourly and shown in the admin. Details: [implementation guide, section 8](IMPLEMENTATION_GUIDE.md#8-history-sync-with-verso).
 
 ## Environments and deployment
 

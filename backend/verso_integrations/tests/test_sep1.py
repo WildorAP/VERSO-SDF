@@ -42,24 +42,20 @@ class Sep1TomlTests(TestCase):
         statuses = {c["status"] for c in currencies}
         self.assertEqual(statuses, {"live"})
 
-    @patch.dict("os.environ", {"SIGNING_SEED": ""})
-    def test_toml_accounts_empty_when_signing_seed_is_blank(self):
+    @override_settings(TURNKEY_SIGN_WITH="")
+    def test_toml_accounts_empty_without_turnkey_wallet(self):
         toml_data = return_toml_contents(None)
         self.assertEqual(toml_data["ACCOUNTS"], [])
 
-    @patch.dict("os.environ", {"SIGNING_SEED": "not-a-valid-stellar-secret-key"})
-    def test_toml_accounts_empty_when_signing_seed_is_invalid(self):
-        toml_data = return_toml_contents(None)
-        self.assertEqual(toml_data["ACCOUNTS"], [])
-
-    def test_toml_accounts_list_turnkey_wallet_first(self):
+    def test_toml_accounts_list_only_the_turnkey_wallet(self):
         signing = Keypair.random()
         wallet = Keypair.random().public_key
         with patch.dict("os.environ", {"SIGNING_SEED": signing.secret}), override_settings(
             TURNKEY_SIGN_WITH=wallet
         ):
             toml_data = return_toml_contents(None)
-        self.assertEqual(toml_data["ACCOUNTS"], [wallet, signing.public_key])
+        self.assertEqual(toml_data["ACCOUNTS"], [wallet])
+        self.assertNotIn(signing.public_key, toml_data["ACCOUNTS"])
 
 
 @override_settings(ROOT_URLCONF="config.urls")
@@ -71,6 +67,20 @@ class Sep1TomlHttpTests(TestCase):
         lines = [line.split("=")[0].strip() for line in response.content.decode().splitlines()]
         self.assertIn("TRANSFER_SERVER_SEP0024", lines)
         self.assertNotIn("TRANSFER_SERVER", lines)
+
+    def test_stellar_toml_keeps_signing_key_out_of_accounts(self):
+        """Wallets verify SEP-10 challenges against SIGNING_KEY, so it stays even outside ACCOUNTS."""
+        wallet = Keypair.random().public_key
+        with override_settings(TURNKEY_SIGN_WITH=wallet):
+            response = self.client.get("/.well-known/stellar.toml")
+        self.assertEqual(response.status_code, 200)
+        lines = response.content.decode().splitlines()
+        signing_key = next(line for line in lines if line.startswith("SIGNING_KEY"))
+        signing_key = signing_key.split("=", 1)[1].strip().strip('"')
+        accounts = next(line for line in lines if line.startswith("ACCOUNTS"))
+        self.assertTrue(signing_key.startswith("G"))
+        self.assertIn(wallet, accounts)
+        self.assertNotIn(signing_key, accounts)
 
     @patch("polaris.settings.HOST_URL", "http://localhost:8000")
     @patch("polaris.sep1.views.os", SimpleNamespace(path=ntpath))

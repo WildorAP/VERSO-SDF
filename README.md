@@ -12,7 +12,7 @@ Repository kept separate from the VERSO core (`BASE_DE_CLIENTES`, [versotek.io](
 | ------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **T1**  | SEP-1, SEP-10  | **Complete** on testnet — 3 deliverables verified, see details below                                                                                                                                                                                                                                        |
 | **T2**  | SEP-24, SEP-38 | **Complete** on testnet — SEP-24 on-ramp + off-ramp webview (VERSO login, KYC gate), SEP-38 quotes, D3 USDC reconciliation. **Workers on Railway** (DEPOSITO, RETIRO, RECONCILIATION). **Evidence:** [`docs/T2_EVIDENCE.md`](docs/T2_EVIDENCE.md)                                                           |
-| **T3**  | Mainnet        | **Complete** — anchor **live on mainnet since 2026-10-16** (SEP-1/10/24/38), hot wallet custody with Turnkey (see deviation 2), D3 reconciliation running on mainnet. 30 real client operations on-chain (27 on-ramp + 3 off-ramp) as of 2026-10-27. See [Tranche 3](#deliverable-status--tranche-3-scf-44) |
+| **T3**  | Mainnet        | **Complete** — anchor **live on mainnet since 2026-10-16** (SEP-1/10/24/38), hot wallet custody with Turnkey (see deviation 2), D3 reconciliation running on mainnet. 30 real client operations on-chain (27 on-ramp + 3 off-ramp) as of 2026-10-27. Since then: operator workflow with reject / hold / refund and history sync with VERSO ([post-launch improvements](#post-launch-improvements-november-2026)). See [Tranche 3](#deliverable-status--tranche-3-scf-44). **Evidence:** [`docs/T3_EVIDENCE.md`](docs/T3_EVIDENCE.md) |
 
 ## Deliverable status — Tranche 1 (SCF #44)
 
@@ -203,7 +203,7 @@ Full evidence (transaction ids, Stellar hashes, quote ids, CloudWatch and admin 
 | D3 reconciliation worker (RPC sync + balance check + CloudWatch)          | Done (Railway worker **RECONCILIATION**) |
 | CI: Postgres + Redis, 182 tests                                           | Done                                     |
 
-**Fiat settlement:** PEN/USD receipt (on-ramp) and payout (off-ramp) are confirmed manually by VERSO operations in the admin (**Mark PEN received**, now named **Mark fiat received** / **Mark fiat sent**). Deposit, withdrawal and reconciliation **workers run on Railway** (see **Production environments** below).
+**Fiat settlement:** PEN/USD receipt (on-ramp) and payout (off-ramp) are confirmed manually by VERSO operations in the admin (**Mark PEN received** in T2, later **Mark fiat received** / **Mark fiat sent**; since November 2026 the per-operation actions **Confirm and send** / **Mark paid**, see [operator workflow](#operator-workflow-reject-hold-refund)). Deposit, withdrawal and reconciliation **workers run on Railway** (see **Production environments** below).
 
 #### Architecture: Django + Polaris (continuation of the T1 decision)
 
@@ -220,8 +220,8 @@ Tranche 2 keeps the stack chosen in Tranche 1: **django-polaris integrated into 
 
 **Covered.** Criterion: _10+ testnet on-ramp and off-ramp transactions completed._ Result: **17 completed** transactions (12 on-ramp, 5 off-ramp; 11 in PEN, 6 in USD) from 2 client accounts, each with a successful on-chain USDC payment. Full list in `docs/T2_EVIDENCE.md` → Deliverable 1.
 
-- **On-ramp (PEN/USD → USDC):** wallet SEP-10 → SEP-24 interactive webview (VERSO login + KYC) → CCI/CCE instructions → operations confirm fiat receipt (**Mark PEN received**, now **Mark fiat received**) → `process_pending_deposits` (Railway **DEPOSITO**) sends USDC on-chain → `completed`.
-- **Off-ramp (USDC → PEN/USD):** wallet SEP-10 → SEP-24 webview (VERSO login + KYC, payout CCI) → client sends USDC with the Polaris `hash` memo → `watch_transactions` (Railway **RETIRO**) detects it → operations send fiat (**Mark fiat sent**) → `completed`.
+- **On-ramp (PEN/USD → USDC):** wallet SEP-10 → SEP-24 interactive webview (VERSO login + KYC) → CCI/CCE instructions → operations confirm fiat receipt (**Mark PEN received** in T2; today **Confirm and send**) → `process_pending_deposits` (Railway **DEPOSITO**) sends USDC on-chain → `completed`.
+- **Off-ramp (USDC → PEN/USD):** wallet SEP-10 → SEP-24 webview (VERSO login + KYC, payout CCI) → client sends USDC with the Polaris `hash` memo → `watch_transactions` (Railway **RETIRO**) detects it → operations send fiat (**Mark fiat sent** in T2; today **Mark paid**) → `completed`.
 - **KYC gate:** the webview requires a VERSO account (login/register, email verification) and an **approved KYC status** from VERSO Core, with DIDIT onboarding when needed (`sep24/kyc_gate.py`, `sep24/kyc_views.py`). Deposits and withdrawals cannot start without it. See _Architecture note_, point 3.
 - **Wallet compatibility:** discovered through `stellar.toml` (`TRANSFER_SERVER_SEP0024`); tested with the Stellar Demo Wallet.
 
@@ -341,12 +341,15 @@ Tested on 2026-09-29 with a synthetic critical discrepancy: OK → ALARM → OK,
 with real PEN/USDC transactions on-chain; CCI/CCE Phase 2 semi-automated settlement operational; codebase prepared
 for external security review; available for ecosystem user testing upon mainnet launch.
 
+Full evidence (the 30 operations with their Stellar transactions, settlement times, live endpoint checks, security
+review): **[`docs/T3_EVIDENCE.md`](docs/T3_EVIDENCE.md)**.
+
 | #   | Deliverable                                  | Status                                                                                                                                                                                                                                                                               |
 | --- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | 1   | Mainnet launch SEP-1/10/24/38                | **Covered** — live on mainnet since 2026-10-16; hot wallet with USDC trustline (Turnkey custody); SEP-1 5/5 and SEP-10 14/17 in the SDF anchor test suite; SEP-38 quote shown before every transaction                                                                               |
 | 2   | CCI/CCE Phase 2 semi-automated settlement    | **Covered** — 30 real client operations on mainnet, all `completed` (27 on-ramp + 3 off-ramp, 9 accounts); **average settlement ~5.4 minutes**; transfers from 3 Peruvian banks (BCP, Alfin Banco, Interbank); [operator runbook](docs/RUNBOOK.md)                                   |
 | 3   | Operational proof + Stellar Anchor Directory | **Covered, with a deviation** — 30 real on/off-ramp operations verifiable on [Stellar Expert](https://stellar.expert/explorer/public/account/GCYWYXFOWGOXOLUI6ZXBSMMRRK4KJUUVHBBSPMM6XAEOAX2YU5KZNJMM); Anchor Directory replaced by open access from any Stellar wallet (see below) |
-| 4   | Hardening + audit preparation                | **Covered** — Turnkey signing verified on-chain and in `test_custody.py`; callbacks reviewed and documented; edge-case suite in CI (`test_edge_cases.py`, 49 tests) and 3 issues fixed                                                                                               |
+| 4   | Hardening + audit preparation                | **Covered** — Turnkey signing verified on-chain and in `test_custody.py`; callbacks reviewed and documented; edge-case suite in CI (`test_edge_cases.py`, 51 tests; 340 tests in total) and 6 issues fixed                                                                           |
 | 5   | Public technical documentation               | **Covered** — [implementation guide](docs/IMPLEMENTATION_GUIDE.md), [mainnet architecture](docs/ARCHITECTURE.md), [callback reference](docs/CALLBACKS.md) and [operator runbook](docs/RUNBOOK.md)                                                                                    |
 
 ### Deliverable 1 — Mainnet launch SEP-1/10/24/38
@@ -400,8 +403,8 @@ production. This also covers the objective _"available for ecosystem user testin
 | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Callback endpoints reviewed                                                                          | Every Polaris integration point and external interface is documented with its inputs, outputs and failure modes in [`docs/CALLBACKS.md`](docs/CALLBACKS.md)                                                                                                                                                        |
 | Signing verified ("KMS signing verified")                                                            | Turnkey signing (KMS replacement, see deviation 2): each signature is verified locally against the hot wallet before submission; payouts above `MAX_PAYOUT_USDC` are blocked; signed envelopes are persisted so retries never pay twice. Verified on-chain on testnet and mainnet and covered by `test_custody.py` |
-| Edge-case suite in CI (invalid SEP-10 signatures, malformed payloads, duplicate IDs, webhook replay) | [`backend/verso_integrations/tests/test_edge_cases.py`](backend/verso_integrations/tests/test_edge_cases.py), one section per group (see table below). Runs on every push against PostgreSQL + Redis, together with the rest of the suite                                                                          |
-| Issues resolved before mainnet                                                                       | Pre-audit fixes listed above (_Pre-audit hardening_) and in the T2 section; T3 operational fixes covered by tests (minimum-amount quotes, "change amount" step); **3 issues found during the T3 hardening review, fixed** (below)                                                                                  |
+| Edge-case suite in CI (invalid SEP-10 signatures, malformed payloads, duplicate IDs, webhook replay) | [`backend/verso_integrations/tests/test_edge_cases.py`](backend/verso_integrations/tests/test_edge_cases.py) (51 tests), one section per group (see table below). Runs on every push against PostgreSQL + Redis, together with the rest of the suite (**340 tests**)                                                |
+| Issues resolved before mainnet                                                                       | Pre-audit fixes listed above (_Pre-audit hardening_) and in the T2 section; T3 operational fixes covered by tests (minimum-amount quotes, "change amount" step); **3 issues found during the T3 hardening review and 3 more found after launch, all fixed** (below)                                                 |
 
 **Edge-case suite** (`test_edge_cases.py`). Each test simulates an attack or an operator mistake and checks the safe
 outcome:
@@ -410,13 +413,13 @@ outcome:
 | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Invalid SEP-10 signatures** | Challenge signed by another account, unsigned, with an extra signer, forged with another server key, expired, built for another network or another home domain; invalid account or home domain in the request; SEP-24 calls with no token, a token signed with another key, an expired token, or the token of another account                                                      | No JWT is issued (400); SEP-24 data is refused (403) and another account's transaction is not found (404). The legitimate flow still returns a token                                                                                           |
 | **Malformed payloads**        | Negative, zero, non-numeric, over-precise or non-finite amounts; payout account with missing fields or an unknown source of funds; receipts that are executables, HTML or text, or larger than 10 MB; unknown assets and invalid amounts in SEP-24; unknown assets, non-numeric amounts, both amounts or broken JSON in SEP-38; non-UUID transaction IDs on every webview endpoint | Validation error (400/403/404), **never a server error**, and no order is created                                                                                                                                                              |
-| **Duplicate IDs**             | _Mark fiat received_ and _Mark fiat sent_ clicked twice; _Mark fiat sent_ with no on-chain USDC; the deposit receipt posted twice; **a second USDC payment carrying the memo of a withdrawal that was already paid**                                                                                                                                                               | The first confirmation is kept and nothing is paid twice; fiat is never released without on-chain USDC; a repeated payment is left unmatched and raises a reconciliation discrepancy                                                           |
+| **Duplicate IDs**             | _Confirm and send_ (fiat received) and _Mark paid_ (fiat sent) applied twice; _Confirm and send_ before the client declared the transfer or when the deposit is no longer waiting for it; _Mark paid_ with no on-chain USDC; the deposit receipt posted twice; **a second USDC payment carrying the memo of a withdrawal that was already paid**                                   | The first confirmation is kept and nothing is paid twice; USDC is never released for an undeclared deposit; fiat is never released without on-chain USDC; a repeated payment is left unmatched and raises a reconciliation discrepancy         |
 | **Webhook replay**            | The DIDIT return URL replayed without a session, with a forged `status=Approved`, for a different transaction, or replayed after a valid approval; the webview status endpoint called with a known transaction ID but without the session that opened it                                                                                                                           | KYC is never approved by the request itself: the anchor always re-checks the status with VERSO Core for the session's own user and transaction. Transaction status is only returned to the session that opened the transaction (403 otherwise) |
 
 Related coverage elsewhere: payout idempotency across crashes and custody outages (`test_custody.py`) and idempotent
 ingest of on-chain events (`reconciliation/tests/test_sync.py`).
 
-**Issues found during the hardening review and fixed:**
+**Issues found during the hardening review and fixed** (1–3 during the T3 review, 4–6 after launch, in November 2026):
 
 1. **Non-UUID transaction IDs caused HTTP 500** on six webview endpoints (`/sep24/transaction/poll/`,
    `/sep24/onboarding/`, `/sep24/onboarding/switch/`, `/sep24/kyc/start/`, `/sep24/kyc/poll/`,
@@ -428,6 +431,20 @@ ingest of on-chain events (`reconciliation/tests/test_sync.py`).
    the waiting pages to refresh themselves). It returned the same data as `GET /sep24/transaction`, which requires a
    SEP-10 token. It now only answers the browser session that opened the transaction through the SEP-24
    interactive token, and the waiting pages stop polling when the session is no longer valid.
+4. **Wallet callback parameters could inject script into the withdrawal instructions page.** Polaris writes the
+   `callback` query parameter unescaped inside a `<script>` block of its `more_info` page, and Django's URL
+   validator accepts quotes. The webview now keeps a callback only if it is `postMessage`, Polaris' `success`
+   marker or an `https` URL made of a strict set of characters; any other value is removed from the request before
+   Polaris renders the page (`drop_unsafe_wallet_callbacks` in `sep24/wallet_callbacks.py`, tests in
+   `test_wallet_callbacks.py`).
+5. **The webview could change a transaction's `on_change_callback` from the query string.** The webview pages are
+   reachable with the transaction ID alone, and they used to store the `on_change_callback` they received, so a
+   crafted link could redirect status notifications. They now only mark a transaction that has no callback as
+   `postMessage`; callback URLs come only from the wallet's SEP-10-authenticated request, through Polaris.
+6. **The webview showed Polaris' internal status message to the client on errors.** That text is written for
+   operators (for example the reason of a rejection). The client now sees fixed texts: a generic error message,
+   one rejection message that is the same for every reason, and "under review" while an operation is held
+   (`operations.customer_message`).
 
 ### Deliverable 5 — Public technical documentation
 
@@ -454,6 +471,79 @@ ingest of on-chain events (`reconciliation/tests/test_sync.py`).
 
 **Deployment policy.** Testnet and mainnet are two Railway environments of the same repository; they differ only in environment variables and database. Testnet deploys automatically from `main`; mainnet auto-deploy is **off** and each release is deployed manually after it has been validated on testnet.
 
+### Post-launch improvements (November 2026)
+
+Changes made after the 30 operations of Deliverable 2, from what operating the anchor with real clients showed.
+They do not change the SEP interfaces; all of them are covered by tests in CI.
+
+#### Operator workflow: reject, hold, refund
+
+Polaris has no "rejected" or "on hold" status, and operations needed both. Each SEP-24 deposit and withdrawal in
+the admin now shows a **stage** derived from the Polaris status and VERSO's metadata (`operation_status.py`) and
+only the **actions allowed in that stage** (`operations.py`). Each action opens a confirmation page; nothing is
+applied from the list, and operations can no longer be deleted from the admin.
+
+| Stage (admin label)                                   | Deposit actions                       | Withdrawal actions               |
+| ----------------------------------------------------- | ------------------------------------- | -------------------------------- |
+| Initiated (_Iniciada_)                                | Confirm and send · Reject · Hold      | Reject · Hold                    |
+| Payment received, payout pending (_falta transferir_) | —                                     | Mark paid · Reject · Hold        |
+| Held (_Retenida_)                                     | Confirm and send · Reject             | Mark paid · Reject               |
+| Error                                                 | Reject                                | Reject                           |
+| Rejected, refund pending (_por devolver_)             | Register refund                       | Register refund                  |
+| Received · Sending (deposits only)                    | — (the deposit worker pays the USDC)  | —                                |
+| Completed · Rejected · Refunded                       | — (closed)                            | — (closed)                       |
+
+- **Confirm and send** (fiat received) and **Mark paid** (fiat sent) replace the former bulk actions _Mark fiat
+  received_ / _Mark fiat sent_, with the same protections: confirmation requires the client's declared transfer and
+  the deposit waiting for it; a withdrawal cannot be paid until its USDC was detected on-chain.
+- **Reject** closes the operation with a reason (client withdrew, different amount, third-party account, compliance
+  review, other) and an internal note. The Polaris status becomes `error` and the wallet is notified. A deposit
+  cannot be rejected once its USDC left; a withdrawal cannot be rejected once it was paid. The anchor records
+  whether the client's funds had already arrived (for withdrawals, from the on-chain payment); if so, the operation
+  stays _rejected, refund pending_ until a refund is registered.
+- **Hold** pauses an operation for review with a mandatory note. The Polaris status does not change, but the deposit
+  worker skips held deposits, so no USDC leaves (`rails.py`). Only one active hold per operation (database
+  constraint); confirming, paying or rejecting releases it.
+- **Register refund** records a refund made outside the anchor (amount and reference; for USDC refunds the
+  reference must be the 64-character Stellar transaction hash). It moves no money.
+- Every action re-reads the operation under a row lock, so two operators cannot act on the same stage twice. The
+  client never sees the reason of a rejection or a hold (issue 6 above).
+
+Tests: `test_operations.py`, `test_operation_status.py`. Procedures: [runbook](docs/RUNBOOK.md).
+
+#### History sync with VERSO
+
+A new service, **SYNC** (`sync_history_to_verso --loop`, `history_sync.py`), sends every SEP-24 operation to the
+client's history in VERSO, so a client sees anchor operations next to their other VERSO operations. Every ~15 s it
+builds the current state of each operation that has an amount (kind, status, wallet, fiat currency and amount, USDC
+amount, rate, dates, Stellar transaction hash and, for withdrawals, the declared source of funds), and sends it only
+if it changed since the last accepted send (SHA-256 fingerprint). VERSO's endpoint is idempotent.
+
+- It sweeps the tables instead of using signals because Polaris sometimes updates statuses with `QuerySet.update()`,
+  which fires no signals. It only reads Polaris and VERSO metadata and writes only its own control table
+  (`VersoHistorySync`), so it cannot affect deposits, withdrawals or reconciliation.
+- Temporary errors (VERSO unavailable, timeout, 5xx) are retried with back-off (30 s up to 15 min); a wallet not
+  linked to a VERSO user, or data rejected by VERSO, is retried hourly and shown in the admin, with a _retry now_
+  action. Redirects are not followed (a redirect means a misconfigured URL and would turn the POST into a GET).
+- `--dry-run` prints what would be sent without sending or saving anything. The service must run with one replica.
+
+Tests: `test_history_sync.py`, `test_core_client.py`.
+
+#### Webview
+
+- **No repeated login for linked wallets.** When the SEP-10 wallet is already linked to an active, KYC-approved
+  VERSO account, the webview skips the VERSO login: the SEP-10 signature proves control of the wallet, and the link
+  was created with a password login. Wallets that are not linked yet still log in, which is where the link is made.
+- **One open operation per wallet.** A wallet with an operation that reached the amount step and is not finished
+  is asked to finish it before starting another. Abandoned webviews (no amount entered) never block.
+- **Sign and pay from the popup.** When the webview was opened from versotek.io, the withdrawal instructions show a
+  _Sign and send payment_ button that asks the opener page, which holds the wallet connection, to sign the USDC
+  payment with the right memo and amount. External wallets do not answer that check, so they keep paying on their
+  own and the button stays hidden (`withdraw_wallet_pay.js`). A _Make another operation_ button asks the opener to
+  start a new SEP-24 transaction once the current one finishes (`new_operation.js`).
+- **`stellar.toml` endpoint URLs** (`WEB_AUTH_ENDPOINT`, `TRANSFER_SERVER_SEP0024`, `ANCHOR_QUOTE_SERVER`) are built
+  by `sep1.py` instead of Polaris, which joins them with `os.path.join` and writes a backslash on Windows.
+
 ## Production environments
 
 | Check                   | Mainnet                                                    | Testnet                                                           |
@@ -469,9 +559,15 @@ Deployed on **Railway** (one environment per network, each with its own **Postgr
 | Railway service    | Role                                                       | Command                                  |
 | ------------------ | ---------------------------------------------------------- | ---------------------------------------- |
 | **VERSO-SDF**      | Web + admin + SEP-1/10/24/38 APIs                          | `gunicorn config.wsgi` (after `migrate`) |
-| **DEPOSITO**       | SEP-24 on-ramp: send USDC after fiat is confirmed          | `process_pending_deposits --loop`        |
+| **DEPOSITO**       | SEP-24 on-ramp: send USDC after fiat is confirmed          | `process_pending_deposits` (loops by itself) |
 | **RETIRO**         | SEP-24 off-ramp: detect inbound USDC                       | `watch_transactions`                     |
 | **RECONCILIATION** | D3: RPC event ingest + balance reconciliation + CloudWatch | `reconciliation_worker --loop`           |
+| **SYNC**           | Sends SEP-24 operations to the client's history in VERSO   | `sync_history_to_verso --loop`           |
+
+Only DEPOSITO holds custody credentials (Turnkey). SYNC and RECONCILIATION run with a single replica.
+
+**Tests.** `python manage.py test verso_integrations reconciliation` from `backend/` (340 tests; SQLite locally,
+PostgreSQL + Redis in GitHub Actions). Setup from a fresh clone: [implementation guide, section 9](docs/IMPLEMENTATION_GUIDE.md#9-testing).
 
 ## Architecture note: deviations from the proposal (SCF #44)
 
@@ -521,7 +617,7 @@ The correct place in the protocol for the KYC check and the DIDIT onboarding red
 
 **Operational note:** Stellar RPC keeps a limited event history (a few days on public providers). If the worker were down longer than that window, events could not be backfilled from RPC. Two safeguards cover this: the CloudWatch `verso-recon-heartbeat` alarm treats missing heartbeats as breaching, so it fires after ~5 minutes without the worker, long before the retention window ends; and if the cursor ever falls outside the retention window, the worker records a critical `worker_stale` discrepancy (`reconciliation/sync.py`) instead of silently skipping events. The balance check would also expose any missed movement as a `balance_mismatch`.
 
-**Where Horizon is still used, and why.** django-polaris 2.x only supports Horizon: `watch_transactions` (service **RETIRO**, detects inbound USDC for withdrawals), `process_pending_deposits` (service **DEPOSITO**, submits USDC payouts) and SEP-10 account loading all go through Polaris' `HORIZON_URI`. This is a limitation of the library, not a design choice; replacing it would mean forking Polaris or rewriting its workers, which no Tranche 2 deliverable requires. VERSO's own code follows a single rule: the reconciliation service uses Stellar RPC, and VERSO's Turnkey custody integration (`custody.py`) reuses Polaris' `HORIZON_URI` so every component always targets the same network. **On mainnet (T3) this dependency was kept**, because Polaris requires it: `HORIZON_URI` is set explicitly to `https://horizon.stellar.org` on every service (see _Mainnet switch (T3)_), and the RETIRO stream runs with an _always restart_ policy so a closed stream never leaves withdrawals undetected. Moving Polaris' workers off Horizon remains future work, outside the Tranche 3 deliverables.
+**Where Horizon is still used, and why.** django-polaris 2.x only supports Horizon: `watch_transactions` (service **RETIRO**, detects inbound USDC for withdrawals), `process_pending_deposits` (service **DEPOSITO**, submits USDC payouts) and SEP-10 account loading all go through Polaris' `HORIZON_URI`. This is a limitation of the library, not a design choice; replacing it would mean forking Polaris or rewriting its workers, which no Tranche 2 deliverable requires. VERSO's own code follows a single rule: the reconciliation service uses Stellar RPC, and VERSO's Turnkey custody integration (`custody.py`) reuses Polaris' `HORIZON_URI` so every component always targets the same network. **On mainnet (T3) this dependency was kept**, because Polaris requires it: `HORIZON_URI` is set explicitly to `https://horizon.stellar.org` on every service (django-polaris reads it independently of `STELLAR_NETWORK_PASSPHRASE`, so changing the passphrase alone would leave the workers on testnet Horizon), and the RETIRO stream runs with an _always restart_ policy so a closed stream never leaves withdrawals undetected. Moving Polaris' workers off Horizon remains future work, outside the Tranche 3 deliverables.
 
 ## Documentation
 
@@ -530,6 +626,7 @@ The correct place in the protocol for the KYC check and the DIDIT onboarding red
 - [`docs/CALLBACKS.md`](docs/CALLBACKS.md) — callback reference: every Polaris integration hook and external interface.
 - [`docs/RUNBOOK.md`](docs/RUNBOOK.md) — operator runbook: fiat settlement, exceptions, reconciliation, incidents.
 - [`docs/T2_EVIDENCE.md`](docs/T2_EVIDENCE.md) — Tranche 2 evidence: transactions, quotes, reconciliation report and alerts.
+- [`docs/T3_EVIDENCE.md`](docs/T3_EVIDENCE.md) — Tranche 3 evidence (mainnet): the 30 operations with their Stellar transactions, settlement times, banks, security review and deviations.
 
 ## License
 

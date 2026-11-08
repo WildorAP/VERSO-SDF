@@ -17,8 +17,10 @@ Back to the [README](../README.md) · Related: [Implementation guide](IMPLEMENTA
 | Payment rails / event handling | `rails` | `VersoRailsIntegration` | Deposit and withdrawal workers |
 | Custody / signing | `custody` | `VersoCustodyIntegration` | Deposit worker, and web for withdrawal instructions |
 | Wallet status callbacks | Polaris `on_change_callback` / `postMessage` | `sep24/wallet_callbacks.py` | Web |
+| Operator actions (fiat settlement, reject, hold, refund) | — (VERSO admin) | `operations.py`, `admin.py` | Web (admin) |
+| Outbound: client history in VERSO | — | `history_sync.py`, `core_client.sync_anchor_transaction` | History sync worker |
 
-All hooks are registered in `verso_integrations/apps.py` (`register_integrations`).
+All Polaris hooks are registered in `verso_integrations/apps.py` (`register_integrations`).
 
 ---
 
@@ -28,7 +30,8 @@ All hooks are registered in `verso_integrations/apps.py` (`register_integrations
 
 | Key | Content |
 | --- | --- |
-| `ACCOUNTS` | Hot wallet (custody) and SEP-10 signing account |
+| `WEB_AUTH_ENDPOINT`, `TRANSFER_SERVER_SEP0024`, `ANCHOR_QUOTE_SERVER` | `HOST_URL` + `/auth`, `/sep24`, `/sep38`, for the SEPs in `ACTIVE_SEPS` (replaces Polaris' values, built with `os.path.join`) |
+| `ACCOUNTS` | Only the hot wallet (custody). The SEP-10 key is published as `SIGNING_KEY` by Polaris; it holds no funds and is not listed here |
 | `CURRENCIES` | USDC anchored to PEN and to USD (`status` `live` / `test` by network) |
 | `DOCUMENTATION` | Organization data |
 | `TRANSFER_SERVER` | `None` — removes the SEP-6 field because SEP-6 is not offered |
@@ -48,7 +51,8 @@ the transaction status page).
 
 | Situation | Form returned |
 | --- | --- |
-| No VERSO session / KYC not approved | `VersoLoginForm`, `VersoRegisterForm`, `VersoVerifyEmailForm`, `VersoProfileForm` or `KycStatusForm` (DIDIT / pending / rejected), chosen by `kyc_gate.onboarding_step` |
+| Another operation of the same wallet is still open | `KycStatusForm` with *"Tienes una operación en curso"* (step `open_operation`); the transaction does not advance |
+| No VERSO session / KYC not approved | `VersoLoginForm`, `VersoRegisterForm`, `VersoVerifyEmailForm`, `VersoProfileForm` or `KycStatusForm` (DIDIT / pending / rejected), chosen by `kyc_gate.onboarding_step`. Skipped when the wallet is linked to an active, KYC-approved VERSO user |
 | KYC approved, no amount yet | `FiatDepositForm` (amount in PEN or USD, minimum per currency in `sep24/fiat.py`) |
 | Amount locked, transfer not declared | `BankTransferReceiptForm` (receipt upload) or `ChangeAmountForm` |
 | Transfer declared or fiat confirmed | `None` (or `TransferAlreadyDeclaredForm` for a repeated POST) |
@@ -69,7 +73,9 @@ advance.
 
 ### `content_for_template(request, template, form=None, transaction=None) → dict`
 
-Supplies titles, guidance text, the live quote, CCI instructions and status messages for each template.
+Supplies titles, guidance text, the live quote, CCI instructions and status messages for each template. A deposit
+whose transfer was declared, whose fiat was confirmed or that ended in `error` always shows the waiting page. Status
+messages come from `operations.customer_message` (rejection, hold) or fixed texts, never from Polaris' `message`.
 
 ### `after_deposit(transaction)`
 
@@ -101,7 +107,8 @@ File: `sep24/withdraw_integration.py`. Polaris base class: `WithdrawalIntegratio
 ### `content_for_template(...)`
 
 Adds the quote, payout details and, once the client must pay, keeps Polaris' `more_info` page with
-`callback=postMessage`, so the wallet receives the hot wallet address, memo and amount to send.
+`callback=postMessage`, so the wallet receives the hot wallet address, memo and amount to send. A withdrawal in
+`error` (for example rejected) shows the same page with the customer notice and without payment instructions.
 
 ---
 
@@ -155,9 +162,9 @@ File: `rails.py`. Polaris base class: `RailsIntegration`. This is where off-chai
 
 ### `poll_pending_deposits(pending_deposits) → list[Transaction]`
 
-Called by the deposit worker (`process_pending_deposits --loop`). Returns the deposits whose fiat was confirmed by
-operations (`Sep24DepositMeta.fiat_confirmed_at` set), after writing their final `amount_in`, `amount_out` and
-`amount_fee = 0`. Polaris then pays them through the custody integration.
+Called by the deposit worker (`process_pending_deposits`). Returns the deposits whose fiat was confirmed by
+operations (`Sep24DepositMeta.fiat_confirmed_at` set) and that have **no active hold**, after writing their final
+`amount_in`, `amount_out` and `amount_fee = 0`. Polaris then pays them through the custody integration.
 
 ### `execute_outgoing_transaction(transaction)`
 
@@ -171,12 +178,24 @@ Returns the withdrawals whose fiat payout was recorded (`fiat_sent_at`), complet
 
 ### Operator actions (admin)
 
-The rails are fed by two admin actions, which are the only way to move fiat-side state:
+The rails are fed by operator actions in the admin (`operations.py`), which are the only way to move fiat-side
+state. Each operation shows only the actions allowed in its current stage (`operation_status.py`); every action is
+applied in a database transaction, after locking the Polaris transaction row and checking the stage again.
 
-| Action | Model | Effect |
-| --- | --- | --- |
-| **Mark fiat received** | SEP-24 deposit metadata | Sets `fiat_confirmed_at`; the next `poll_pending_deposits` releases the USDC payout |
-| **Mark fiat sent** | SEP-24 withdrawal metadata | Sets `fiat_sent_at` and completes the withdrawal. **Refused** if no on-chain USDC payment was detected for it |
+| Action | Applies to | Effect | Refused when |
+| --- | --- | --- | --- |
+| **Confirm and send** (*Confirmar y enviar*) | Deposit, initiated or held | Sets `fiat_confirmed_at` and releases any hold; the next `poll_pending_deposits` releases the USDC payout | The client has not declared the transfer, or the status is not `pending_user_transfer_start` |
+| **Mark paid** (*Marcar pagado*) | Withdrawal, USDC received or held | Sets `fiat_sent_at`, completes the withdrawal and releases any hold | No on-chain USDC payment was detected (`WithdrawalUsdcNotReceivedError`) |
+| **Reject** (*Rechazar*) | Deposit or withdrawal not finished | Creates `OperationRejection` (reason, note, `funds_received`), releases holds, sets status `error` with `status_message = "Rejected by operator: <reason>"`, and calls the wallet callback (`maybe_make_callback`) | Deposit whose USDC already left; withdrawal already paid |
+| **Hold** (*Retener*) | Deposit initiated; withdrawal initiated or USDC received | Creates an active `OperationHold` with a mandatory note. Polaris status unchanged; held deposits are not paid | An active hold already exists (one per transaction, database constraint) |
+| **Register refund** (*Registrar devolución*) | Rejected with funds received | Records amount, reference, operator and time on the rejection, and sets `Transaction.refunded`. Moves no money | Amount ≤ 0, empty reference, or (withdrawals) a reference that is not a 64-character Stellar transaction hash |
+
+`funds_received` is taken from the chain for withdrawals (`usdc_payment_received`) and, for deposits, from
+`fiat_confirmed_at` or from the operator's answer (the anchor cannot see the bank). Rejection reasons:
+`client_withdrew`, `amount_mismatch`, `third_party`, `compliance`, `other` (a note is mandatory for `other`).
+
+**What the client sees** (`customer_message`): the same rejection text for every reason, *"Tu operación está en
+revisión"* during a hold, and a generic error text otherwise. Reasons and notes are internal.
 
 ---
 
@@ -210,11 +229,35 @@ is already on the ledger and returns it instead of paying again.
 | Mechanism | Behavior |
 | --- | --- |
 | `GET /sep24/transaction?id=` | Standard SEP-24 status endpoint (SEP-10 JWT required). Includes `withdraw_anchor_account` and `withdraw_memo` for withdrawals awaiting payment |
-| `on_change_callback` | Polaris POSTs the transaction to the wallet's URL on status changes when the wallet provides one (including after **Mark fiat sent**) |
+| `GET /sep24/transaction/poll/?id=` | Used by the webview's waiting pages. Only answers the browser session that opened the transaction (403 otherwise); non-UUID IDs answer 400. Returns `status`, the customer message and `completed_at` |
+| `on_change_callback` | Polaris POSTs the transaction to the wallet's URL on status changes when the wallet provides one (including after **Mark paid** and **Reject**) |
 | `postMessage` | The webview posts the transaction JSON to `window.opener` / `window.parent` when the client must act (withdrawal payment) and on completion |
 
 `sep24/wallet_callbacks.py` keeps the wallet's `callback` and `on_change_callback` parameters in the webview session,
-so they survive the login, KYC and amount steps.
+so they survive the login, KYC and amount steps. Safety rules:
+
+- A callback value is kept only if it is `postMessage`, `success` or an `https` URL (`http` too in local mode) with a
+  host, made only of the characters `A–Z a–z 0–9 - . _ ~ : / ? # @ ! $ & * + , = %`. Polaris writes `callback`
+  unescaped inside a `<script>` block in `more_info`, so `drop_unsafe_wallet_callbacks` removes any other value from
+  the request before Polaris renders the page.
+- The webview pages are reachable with only a transaction ID, so they never store or replace a callback URL on the
+  transaction; they can only set `on_change_callback = "postMessage"` on a transaction that has none. Callback URLs
+  come only from the wallet's SEP-10-authenticated request, through Polaris.
+
+### Messages between the webview and versotek.io
+
+When the webview is opened as a popup from versotek.io, it exchanges these `postMessage` messages with its opener.
+The webview only accepts messages whose `source` is its opener and whose `transaction_id` matches the page.
+
+| Message | Direction | Meaning |
+| --- | --- | --- |
+| `verso:withdraw_pay_check` | webview → opener | "Can you sign this withdrawal's payment?" |
+| `verso:withdraw_pay_ready` | opener → webview | Yes: the webview shows *Firmar y enviar pago* |
+| `verso:pay_withdraw` | webview → opener | The client clicked: sign and submit the USDC payment with the memo and amount of the transaction |
+| `verso:withdraw_pay_result` | opener → webview | `ok: true`, or `ok: false` with an `error` text shown to the client |
+| `verso:new_operation` | webview → opener | Start a new SEP-24 operation (`operation`: `deposit` or `withdraw`); only the opener holds the SEP-10 token |
+
+Wallets that do not answer `verso:withdraw_pay_check` pay on their own, as with any SEP-24 anchor.
 
 ---
 
@@ -223,3 +266,38 @@ so they survive the login, KYC and amount steps.
 The webview reads KYC status from VERSO Core for the logged-in VERSO user and, when needed, starts a DIDIT
 verification session embedded in the webview. Possible statuses: `approved`, `pending`, `rejected`, `not_found`. Only
 `approved` unlocks the amount step. The SEP-10 endpoint never consults KYC.
+
+Core's user lookup accepts an email or a Stellar public key (`core_client.user_status`). The webview uses the
+public-key lookup to skip the login only when Core reports the user as active, KYC-completed and linked to exactly
+that wallet; on any error it falls back to the login.
+
+---
+
+## Outbound: history sync — `history_sync.sync_once`
+
+Called in a loop by `sync_history_to_verso --loop`. For each SEP-24 transaction with VERSO metadata that is not
+`incomplete`, it posts this document to VERSO Core over the authenticated server-to-server channel
+(`core_client.sync_anchor_transaction`, 10 s timeout, redirects not followed):
+
+| Field | Content |
+| --- | --- |
+| `anchor_transaction_id` | Polaris transaction ID (UUID); VERSO's key for idempotency |
+| `kind` | `deposit` or `withdrawal` |
+| `status` | Polaris status |
+| `stellar_account` | Client wallet (SEP-10 account) |
+| `fiat_currency`, `amount_fiat`, `amount_usdc`, `rate` | Values locked at the amount step |
+| `started_at`, `completed_at` | ISO 8601; `completed_at` may be `null` |
+| `stellar_transaction_id` | On-chain hash, or empty |
+| `origen_fondos`, `origen_fondos_otro` | Withdrawals only: declared source of funds |
+
+A document is sent only when its SHA-256 fingerprint differs from the last one VERSO accepted. Responses:
+
+| Response | Result stored in `VersoHistorySync` | Next attempt |
+| --- | --- | --- |
+| 200 / 201 | `synced` (keeps VERSO's `id` if returned) | Only when the operation changes |
+| 422 `stellar_account_not_linked` | `not_linked` | 1 hour, or as soon as the operation changes |
+| 400 / 409 | `rejected` | 1 hour, or as soon as the operation changes |
+| 3xx, 404, 5xx, 401, network error | `retrying` | Back-off 30 s, 60 s, 2 min, 5 min, 10 min, 15 min |
+
+Errors are recorded per operation and never stop the sweep. The admin (*sincronización con VERSO*) is read-only,
+with a *retry now* action that clears the fingerprint so the next sweep resends.

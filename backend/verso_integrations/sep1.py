@@ -9,7 +9,6 @@ a backslash on Windows, so the ones VERSO serves are rebuilt here.
 import os
 
 from polaris import settings as polaris_settings
-from stellar_sdk import Keypair
 
 from verso_integrations.turnkey_signer import turnkey_sign_with
 
@@ -62,21 +61,12 @@ def _usdc_currency(anchor_asset: str, description: str, redemption: str) -> dict
 
 
 def return_toml_contents(request, *args, **kwargs):
-    # T3: the Turnkey hot wallet (USDC payouts / withdrawals) is listed first; the SEP-10
-    # signing account is also controlled by VERSO, so it stays in ACCOUNTS.
-    anchor_accounts = []
+    # ACCOUNTS lists only the Turnkey hot wallet, the one account that holds and moves USDC.
+    # The SEP-10 signing account is published as SIGNING_KEY (Polaris adds it); it holds no
+    # funds and does not exist on-chain, so it is not listed here. ACCOUNTS is always set, so
+    # Polaris' default (each asset's distribution account) is never published instead.
     turnkey_wallet = turnkey_sign_with()
-    if turnkey_wallet:
-        anchor_accounts.append(turnkey_wallet)
-    signing_seed = os.environ.get("SIGNING_SEED", "").strip()
-    if signing_seed:
-        try:
-            signing_account = Keypair.from_secret(signing_seed).public_key
-            if signing_account not in anchor_accounts:
-                anchor_accounts.append(signing_account)
-        except Exception:
-            # Invalid SIGNING_SEED in env — avoid 500 on GET stellar.toml
-            pass
+    anchor_accounts = [turnkey_wallet] if turnkey_wallet else []
 
     return {
         **_endpoint_urls(),
