@@ -50,7 +50,7 @@ Polaris writes the endpoint fields from the active SEPs (`WEB_AUTH_ENDPOINT`, `S
 | Field | Value |
 | --- | --- |
 | `ACCOUNTS` | Only the Turnkey hot wallet, the account that holds and moves USDC. The SEP-10 key appears as `SIGNING_KEY` (written by Polaris); it holds no funds and does not exist on-chain, so it is not listed |
-| `CURRENCIES` | USDC twice: one entry anchored to PEN and one to USD, each with `anchor_asset_type = "fiat"`, `status = "live"` on mainnet (`"test"` on testnet) and redemption instructions |
+| `CURRENCIES` | USDC twice: one entry anchored to PEN and one to USD, each with `anchor_asset_type = "fiat"`, `status = "live"` and redemption instructions |
 | `DOCUMENTATION` | Organization name, URL, logo, contact emails and address |
 | `TRANSFER_SERVER` | **Removed on purpose** (see below) |
 
@@ -85,7 +85,7 @@ Endpoint: `GET /auth?account=G…` (challenge) and `POST /auth` (signed challeng
   `stellar.toml` updates automatically and wallets fetch it on every login.
 
 **Verification:** `@stellar/anchor-tests` passes **SEP-10 14/17** on mainnet. The three remaining tests (*Account
-Signer Support*) create and fund accounts with extra signers, which the suite can only do on testnet; they pass there.
+Signer Support*) create and fund their own accounts with extra signers, which the suite does not do on mainnet.
 A reproducible CLI walkthrough is in the README (*Tranche 1, Deliverable 2*).
 
 ## 4. SEP-24 — Interactive deposit and withdrawal
@@ -177,6 +177,10 @@ VERSO's commission is the spread between `rate_venta` and `rate_compra`. SEP-24 
 Network fees (XLM) for payouts are paid by the hot wallet.
 
 ### 4.6 Popup wallets
+
+The ANCHOR button on versotek.io connects the user's own wallet with the Stellar Wallets Kit — **Freighter**,
+**xBull** and **LOBSTR** (mobile, through WalletConnect) — and opens the webview as a popup. Any other SEP-24 wallet
+can use the anchor directly from its `stellar.toml`.
 
 Wallets that open the webview as a popup (Stellar Demo Wallet style, or the ANCHOR button on versotek.io) need the
 popup to stay connected to its opener:
@@ -328,5 +332,5 @@ static manifest, as in production). **340 tests** (305 in `verso_integrations`, 
 | Edge cases (invalid SEP-10 signatures, malformed payloads, duplicate IDs, webhook replay) | `test_edge_cases.py` (51) |
 | Reconciliation | `reconciliation/tests/` (events, sync, matching, reconcile, alerts, report, bootstrap, admin) |
 
-End-to-end checks against a live deployment: `@stellar/anchor-tests` (SEP-1, SEP-10), the Stellar Demo Wallet on
-testnet and the ANCHOR button on versotek.io on mainnet.
+End-to-end checks against a live deployment: `@stellar/anchor-tests` (SEP-1, SEP-10), and the ANCHOR button on
+versotek.io.

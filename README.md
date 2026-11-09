@@ -4,7 +4,7 @@ VERSO's Stellar anchor (PSAV Peru) implemented with **Django + Polaris**.
 
 Repository kept separate from the VERSO core (`BASE_DE_CLIENTES`, [versotek.io](https://versotek.io)).
 
-**Production (mainnet):** https://anchor.versotek.io · **Testnet:** https://verso-sdf-testnet.up.railway.app
+**Production (mainnet):** https://anchor.versotek.io · **Testnet (Tranches 1 and 2):** https://verso-sdf-testnet.up.railway.app
 
 ## Roadmap
 
@@ -12,7 +12,7 @@ Repository kept separate from the VERSO core (`BASE_DE_CLIENTES`, [versotek.io](
 | ------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **T1**  | SEP-1, SEP-10  | **Complete** on testnet — 3 deliverables verified, see details below                                                                                                                                                                                                                                        |
 | **T2**  | SEP-24, SEP-38 | **Complete** on testnet — SEP-24 on-ramp + off-ramp webview (VERSO login, KYC gate), SEP-38 quotes, D3 USDC reconciliation. **Workers on Railway** (DEPOSITO, RETIRO, RECONCILIATION). **Evidence:** [`docs/T2_EVIDENCE.md`](docs/T2_EVIDENCE.md)                                                           |
-| **T3**  | Mainnet        | **Complete** — anchor **live on mainnet since 2026-10-16** (SEP-1/10/24/38), hot wallet custody with Turnkey (see deviation 2), D3 reconciliation running on mainnet. 30 real client operations on-chain (27 on-ramp + 3 off-ramp) as of 2026-10-27. Since then: operator workflow with reject / hold / refund and history sync with VERSO ([post-launch improvements](#post-launch-improvements-november-2026)). See [Tranche 3](#deliverable-status--tranche-3-scf-44). **Evidence:** [`docs/T3_EVIDENCE.md`](docs/T3_EVIDENCE.md) |
+| **T3**  | Mainnet        | **Complete** — anchor **live on mainnet since 2026-10-16** (SEP-1/10/24/38), hot wallet custody with Turnkey (see deviation 2), D3 reconciliation running on mainnet. 33 real client operations on-chain (30 on-ramp + 3 off-ramp, 11 accounts) as of 2026-11-08. Operator workflow with approve / hold / reject / refund and client history synced with VERSO ([Deliverable 2](#deliverable-2--ccicce-phase-2-semi-automated-settlement)). See [Tranche 3](#deliverable-status--tranche-3-scf-44). **Evidence:** [`docs/T3_EVIDENCE.md`](docs/T3_EVIDENCE.md) |
 
 ## Deliverable status — Tranche 1 (SCF #44)
 
@@ -203,7 +203,7 @@ Full evidence (transaction ids, Stellar hashes, quote ids, CloudWatch and admin 
 | D3 reconciliation worker (RPC sync + balance check + CloudWatch)          | Done (Railway worker **RECONCILIATION**) |
 | CI: Postgres + Redis, 182 tests                                           | Done                                     |
 
-**Fiat settlement:** PEN/USD receipt (on-ramp) and payout (off-ramp) are confirmed manually by VERSO operations in the admin (**Mark PEN received** in T2, later **Mark fiat received** / **Mark fiat sent**; since November 2026 the per-operation actions **Confirm and send** / **Mark paid**, see [operator workflow](#operator-workflow-reject-hold-refund)). Deposit, withdrawal and reconciliation **workers run on Railway** (see **Production environments** below).
+**Fiat settlement:** PEN/USD receipt (on-ramp) and payout (off-ramp) are confirmed manually by VERSO operations in the admin (**Mark PEN received** in T2, later **Mark fiat received** / **Mark fiat sent**; in T3 the per-operation actions **Confirm and send** / **Mark paid**, see [operator workflow](#operator-workflow-reject-hold-refund)). Deposit, withdrawal and reconciliation **workers run on Railway** (see **Production environments** below).
 
 #### Architecture: Django + Polaris (continuation of the T1 decision)
 
@@ -341,14 +341,14 @@ Tested on 2026-09-29 with a synthetic critical discrepancy: OK → ALARM → OK,
 with real PEN/USDC transactions on-chain; CCI/CCE Phase 2 semi-automated settlement operational; codebase prepared
 for external security review; available for ecosystem user testing upon mainnet launch.
 
-Full evidence (the 30 operations with their Stellar transactions, settlement times, live endpoint checks, security
+Full evidence (all 33 operations with their Stellar transactions, settlement times, live endpoint checks, security
 review): **[`docs/T3_EVIDENCE.md`](docs/T3_EVIDENCE.md)**.
 
 | #   | Deliverable                                  | Status                                                                                                                                                                                                                                                                               |
 | --- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | 1   | Mainnet launch SEP-1/10/24/38                | **Covered** — live on mainnet since 2026-10-16; hot wallet with USDC trustline (Turnkey custody); SEP-1 5/5 and SEP-10 14/17 in the SDF anchor test suite; SEP-38 quote shown before every transaction                                                                               |
-| 2   | CCI/CCE Phase 2 semi-automated settlement    | **Covered** — 30 real client operations on mainnet, all `completed` (27 on-ramp + 3 off-ramp, 9 accounts); **average settlement ~5.4 minutes**; transfers from 3 Peruvian banks (BCP, Alfin Banco, Interbank); [operator runbook](docs/RUNBOOK.md)                                   |
-| 3   | Operational proof + Stellar Anchor Directory | **Covered, with a deviation** — 30 real on/off-ramp operations verifiable on [Stellar Expert](https://stellar.expert/explorer/public/account/GCYWYXFOWGOXOLUI6ZXBSMMRRK4KJUUVHBBSPMM6XAEOAX2YU5KZNJMM); Anchor Directory replaced by open access from any Stellar wallet (see below) |
+| 2   | CCI/CCE Phase 2 semi-automated settlement    | **Covered** — 30 consecutive real client operations on mainnet, all `completed` (27 on-ramp + 3 off-ramp, 9 accounts); **average settlement ~5.4 minutes**; transfers from 3 Peruvian banks (BCP, Alfin Banco, Interbank); [operator runbook](docs/RUNBOOK.md)                                   |
+| 3   | Operational proof + Stellar Anchor Directory | **Covered, with a deviation** — 33 real on/off-ramp operations (as of 2026-11-08) verifiable on [Stellar Expert](https://stellar.expert/explorer/public/account/GCYWYXFOWGOXOLUI6ZXBSMMRRK4KJUUVHBBSPMM6XAEOAX2YU5KZNJMM); Anchor Directory replaced by open access from any Stellar wallet (see below) |
 | 4   | Hardening + audit preparation                | **Covered** — Turnkey signing verified on-chain and in `test_custody.py`; callbacks reviewed and documented; edge-case suite in CI (`test_edge_cases.py`, 51 tests; 340 tests in total) and 6 issues fixed                                                                           |
 | 5   | Public technical documentation               | **Covered** — [implementation guide](docs/IMPLEMENTATION_GUIDE.md), [mainnet architecture](docs/ARCHITECTURE.md), [callback reference](docs/CALLBACKS.md) and [operator runbook](docs/RUNBOOK.md)                                                                                    |
 
@@ -358,7 +358,7 @@ review): **[`docs/T3_EVIDENCE.md`](docs/T3_EVIDENCE.md)**.
 | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Hot wallet active on mainnet with USDC trustline               | Turnkey wallet [`GCYW…NJMM`](https://stellar.expert/explorer/public/account/GCYWYXFOWGOXOLUI6ZXBSMMRRK4KJUUVHBBSPMM6XAEOAX2YU5KZNJMM); trustline to Circle USDC signed by Turnkey ([`8d7e05e2…`](https://stellar.expert/explorer/public/tx/8d7e05e29ae29be7f987b7870e9fc909815a8cc0a8fe869e53b69681c9af1643)) |
 | Mainnet `stellar.toml` without validation errors               | SDF anchor test suite (`@stellar/anchor-tests`) **SEP-1 5/5** against `anchor.versotek.io`. Stellar Laboratory does not validate `stellar.toml`; the official CLI suite is used instead                                                                                                                       |
-| SEP-10 operational on mainnet                                  | **SEP-10 14/17**; the 3 remaining tests (_Account Signer Support_) need funded test accounts that the suite can only create on testnet, where they pass                                                                                                                                                       |
+| SEP-10 operational on mainnet                                  | **SEP-10 14/17**; the 3 remaining tests (_Account Signer Support_) create and fund their own test accounts with extra signers, which the suite does not do on mainnet                                                                                                                                                       |
 | SEP-38 quotes visible in a wallet before each real transaction | The SEP-24 webview shows the live rate, the amount sent and the amount received before the client confirms, for every operation; the same price is served by `/sep38/price` and `/sep38/quote` ([how it works](docs/IMPLEMENTATION_GUIDE.md#5-sep-38--quotes))                                                |
 
 Two items in the deliverable description are implemented differently: signing uses **Turnkey** instead of AWS KMS
@@ -366,12 +366,29 @@ Two items in the deliverable description are implemented differently: signing us
 treasury wallet**, not connected to the anchor or its servers, which funds the hot wallet
 ([keys and custody](docs/ARCHITECTURE.md#keys-and-custody)).
 
+#### SEP-24 webview on mainnet
+
+How the interactive flow works for wallets and for the ANCHOR button on versotek.io:
+
+- **No repeated login for linked wallets.** When the SEP-10 wallet is already linked to an active, KYC-approved
+  VERSO account, the webview skips the VERSO login: the SEP-10 signature proves control of the wallet, and the link
+  was created with a password login. Wallets that are not linked yet still log in, which is where the link is made.
+- **One open operation per wallet.** A wallet with an operation that reached the amount step and is not finished
+  is asked to finish it before starting another. Abandoned webviews (no amount entered) never block.
+- **Sign and pay from the popup.** When the webview was opened from versotek.io, the withdrawal instructions show a
+  _Sign and send payment_ button that asks the opener page, which holds the wallet connection, to sign the USDC
+  payment with the right memo and amount. External wallets do not answer that check, so they keep paying on their
+  own and the button stays hidden (`withdraw_wallet_pay.js`). A _Make another operation_ button asks the opener to
+  start a new SEP-24 transaction once the current one finishes (`new_operation.js`).
+- **`stellar.toml` endpoint URLs** (`WEB_AUTH_ENDPOINT`, `TRANSFER_SERVER_SEP0024`, `ANCHOR_QUOTE_SERVER`) are built
+  by `sep1.py` instead of Polaris, which joins them with `os.path.join` and writes a backslash on Windows.
+
 ### Deliverable 2 — CCI/CCE Phase 2 semi-automated settlement
 
 | Criterion                                          | Evidence                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 30 consecutive real transactions                   | **30 completed** on mainnet between 2026-10-18 and 2026-10-27: 27 on-ramp (PEN/USD → USDC) and 3 off-ramp (USDC → PEN/USD), from 9 client accounts, all visible in the [hot wallet history](https://stellar.expert/explorer/public/account/GCYWYXFOWGOXOLUI6ZXBSMMRRK4KJUUVHBBSPMM6XAEOAX2YU5KZNJMM)                                                                                                                                                                                                                                              |
-| Average settlement ≤ ~30 minutes                   | **~5.4 minutes on average over the 30 operations.** On-ramp: from the client's declared bank transfer to the USDC payment on-chain (27 operations, ~5.0 min; 26 of them under 15 min, slowest ~31 min). Off-ramp: from the client's USDC payment on-chain to the fiat payout (3 operations, ~8.8 min). Computed from the admin timestamps (minute precision) and the on-chain payment times. Example: first on-ramp, tx [`1c49fbfa…`](https://stellar.expert/explorer/public/tx/1c49fbfacf18501b113279fa8d5af1774b8839d45b1f42d540e5b0cc5abb496c) |
+| 30 consecutive real transactions                   | **30 completed** on mainnet between 2026-10-18 and 2026-10-27: 27 on-ramp (PEN/USD → USDC) and 3 off-ramp (USDC → PEN/USD), from 9 client accounts (33 operations from 11 accounts as of 2026-11-08), all visible in the [hot wallet history](https://stellar.expert/explorer/public/account/GCYWYXFOWGOXOLUI6ZXBSMMRRK4KJUUVHBBSPMM6XAEOAX2YU5KZNJMM)                                                                                                                                                                                                                                              |
+| Average settlement ≤ ~30 minutes                   | **5.4 minutes on average over the 30 operations** (5.5 min over all 33 to date). On-ramp: from the client's declared bank transfer to the USDC payment on-chain (27 operations, 5.0 min; 26 of them under 15 min, slowest 31.6 min). Off-ramp: from the client's USDC payment on-chain to the fiat payout (3 operations, 8.8 min). Per-operation times in [`docs/T3_EVIDENCE.md`](docs/T3_EVIDENCE.md). Computed from the admin timestamps (minute precision) and the on-chain payment times. Example: first on-ramp, tx [`1c49fbfa…`](https://stellar.expert/explorer/public/tx/1c49fbfacf18501b113279fa8d5af1774b8839d45b1f42d540e5b0cc5abb496c) |
 | Transfers from at least 3 different Peruvian banks | **BCP, Alfin Banco and Interbank.** CCI/CCE is interbank, so clients can pay from any Peruvian bank to VERSO's account                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | Operator runbook published on GitHub               | [`docs/RUNBOOK.md`](docs/RUNBOOK.md)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 
@@ -379,11 +396,65 @@ Settlement is **semi-automated by design**: quotes, CCI instructions, on-chain p
 withdrawals and reconciliation are automatic; a VERSO operator confirms each fiat movement in the admin, as required
 by VERSO's obligations as a PSAV in Peru. A withdrawal cannot be completed until its USDC payment is detected on-chain.
 
+#### Operator workflow: reject, hold, refund
+
+The operator approves, holds or rejects each operation from the admin. Polaris has no "rejected" or "on hold"
+status, so VERSO adds them on top of it: each SEP-24 deposit and withdrawal in the admin shows a **stage** derived from the Polaris status and VERSO's metadata (`operation_status.py`) and
+only the **actions allowed in that stage** (`operations.py`). Each action opens a confirmation page; nothing is
+applied from the list, and operations cannot be deleted from the admin.
+
+| Stage (admin label)                                   | Deposit actions                       | Withdrawal actions               |
+| ----------------------------------------------------- | ------------------------------------- | -------------------------------- |
+| Initiated (_Iniciada_)                                | Confirm and send · Reject · Hold      | Reject · Hold                    |
+| Payment received, payout pending (_falta transferir_) | —                                     | Mark paid · Reject · Hold        |
+| Held (_Retenida_)                                     | Confirm and send · Reject             | Mark paid · Reject               |
+| Error                                                 | Reject                                | Reject                           |
+| Rejected, refund pending (_por devolver_)             | Register refund                       | Register refund                  |
+| Received · Sending (deposits only)                    | — (the deposit worker pays the USDC)  | —                                |
+| Completed · Rejected · Refunded                       | — (closed)                            | — (closed)                       |
+
+- **Confirm and send** (fiat received) and **Mark paid** (fiat sent) are the operator's approval of each fiat
+  movement: confirmation requires the client's declared transfer and the deposit waiting for it; a withdrawal cannot
+  be paid until its USDC was detected on-chain.
+- **Reject** closes the operation with a reason (client withdrew, different amount, third-party account, compliance
+  review, other) and an internal note. The Polaris status becomes `error` and the wallet is notified. A deposit
+  cannot be rejected once its USDC left; a withdrawal cannot be rejected once it was paid. The anchor records
+  whether the client's funds had already arrived (for withdrawals, from the on-chain payment); if so, the operation
+  stays _rejected, refund pending_ until a refund is registered.
+- **Hold** pauses an operation for review with a mandatory note. The Polaris status does not change, but the deposit
+  worker skips held deposits, so no USDC leaves (`rails.py`). Only one active hold per operation (database
+  constraint); confirming, paying or rejecting releases it.
+- **Register refund** records a refund made outside the anchor (amount and reference; for USDC refunds the
+  reference must be the 64-character Stellar transaction hash). It moves no money.
+- Every action re-reads the operation under a row lock, so two operators cannot act on the same stage twice. The
+  client never sees the reason of a rejection or a hold (issue 6 in Deliverable 4).
+
+Tests: `test_operations.py`, `test_operation_status.py`. Procedures: [runbook](docs/RUNBOOK.md).
+
+#### Client history in VERSO
+
+The **SYNC** service (`sync_history_to_verso --loop`, `history_sync.py`), sends every SEP-24 operation to the
+client's history in VERSO, so a client sees anchor operations next to their other VERSO operations. Every ~15 s it
+builds the current state of each operation that has an amount (kind, status, wallet, fiat currency and amount, USDC
+amount, rate, dates, Stellar transaction hash and, for withdrawals, the declared source of funds), and sends it only
+if it changed since the last accepted send (SHA-256 fingerprint). VERSO's endpoint is idempotent.
+
+- It sweeps the tables instead of using signals because Polaris sometimes updates statuses with `QuerySet.update()`,
+  which fires no signals. It only reads Polaris and VERSO metadata and writes only its own control table
+  (`VersoHistorySync`), so it cannot affect deposits, withdrawals or reconciliation.
+- Temporary errors (VERSO unavailable, timeout, 5xx) are retried with back-off (30 s up to 15 min); a wallet not
+  linked to a VERSO user, or data rejected by VERSO, is retried hourly and shown in the admin, with a _retry now_
+  action. Redirects are not followed (a redirect means a misconfigured URL and would turn the POST into a GET).
+- `--dry-run` prints what would be sent without sending or saving anything. The service must run with one replica.
+
+Tests: `test_history_sync.py`, `test_core_client.py`.
+
+
 ### Deliverable 3 — Operational proof + Stellar Anchor Directory
 
 | Criterion                                                      | Evidence                                                                                                                                                                                                            |
 | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 10+ real on/off-ramp transactions verifiable on Stellar Expert | **30**, see Deliverable 2                                                                                                                                                                                           |
+| 10+ real on/off-ramp transactions verifiable on Stellar Expert | **33** (as of 2026-11-08), see Deliverable 2                                                                                                                                                                                           |
 | Account history public                                         | Hot wallet history on [Stellar Expert](https://stellar.expert/explorer/public/account/GCYWYXFOWGOXOLUI6ZXBSMMRRK4KJUUVHBBSPMM6XAEOAX2YU5KZNJMM); every payout and every received withdrawal is a public transaction |
 | VERSO submitted to the Stellar Anchor Directory                | **Deviation** — see below                                                                                                                                                                                           |
 
@@ -397,14 +468,23 @@ by any SEP-24 wallet, and the **ANCHOR** button on [versotek.io](https://versote
 wallet, sign SEP-10 with it and run the SEP-24 on-ramp or off-ramp. VERSO itself operates through the anchor in
 production. This also covers the objective _"available for ecosystem user testing upon mainnet launch"_.
 
+**Wallets available on mainnet:**
+
+| Wallet | How it connects | Status on mainnet |
+| ------ | --------------- | ----------------- |
+| **Freighter** | Browser extension, through the ANCHOR button on versotek.io | **Used by clients** for deposits and withdrawals |
+| **LOBSTR** | Mobile app through WalletConnect, from the ANCHOR button on versotek.io | **Used by clients** for deposits and withdrawals |
+| **xBull** | Browser extension / web, through the ANCHOR button on versotek.io | Enabled; not yet used by a client |
+| Any other SEP-24 wallet | Discovers the anchor through `anchor.versotek.io/.well-known/stellar.toml` (SEP-1) and runs SEP-10 + SEP-24 on its own | Open; no integration agreement needed |
+
 ### Deliverable 4 — Hardening + audit preparation
 
 | Criterion                                                                                            | Evidence                                                                                                                                                                                                                                                                                                           |
 | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Callback endpoints reviewed                                                                          | Every Polaris integration point and external interface is documented with its inputs, outputs and failure modes in [`docs/CALLBACKS.md`](docs/CALLBACKS.md)                                                                                                                                                        |
-| Signing verified ("KMS signing verified")                                                            | Turnkey signing (KMS replacement, see deviation 2): each signature is verified locally against the hot wallet before submission; payouts above `MAX_PAYOUT_USDC` are blocked; signed envelopes are persisted so retries never pay twice. Verified on-chain on testnet and mainnet and covered by `test_custody.py` |
+| Signing verified ("KMS signing verified")                                                            | Turnkey signing (KMS replacement, see deviation 2): each signature is verified locally against the hot wallet before submission; payouts above `MAX_PAYOUT_USDC` are blocked; signed envelopes are persisted so retries never pay twice. Verified on-chain on mainnet and covered by `test_custody.py` |
 | Edge-case suite in CI (invalid SEP-10 signatures, malformed payloads, duplicate IDs, webhook replay) | [`backend/verso_integrations/tests/test_edge_cases.py`](backend/verso_integrations/tests/test_edge_cases.py) (51 tests), one section per group (see table below). Runs on every push against PostgreSQL + Redis, together with the rest of the suite (**340 tests**)                                                |
-| Issues resolved before mainnet                                                                       | Pre-audit fixes listed above (_Pre-audit hardening_) and in the T2 section; T3 operational fixes covered by tests (minimum-amount quotes, "change amount" step); **3 issues found during the T3 hardening review and 3 more found after launch, all fixed** (below)                                                 |
+| Issues resolved before mainnet                                                                       | Pre-audit fixes listed above (_Pre-audit hardening_) and in the T2 section; T3 operational fixes covered by tests (minimum-amount quotes, "change amount" step); **6 issues found during the T3 hardening review, all fixed** (below)                                                 |
 
 **Edge-case suite** (`test_edge_cases.py`). Each test simulates an attack or an operator mistake and checks the safe
 outcome:
@@ -419,7 +499,7 @@ outcome:
 Related coverage elsewhere: payout idempotency across crashes and custody outages (`test_custody.py`) and idempotent
 ingest of on-chain events (`reconciliation/tests/test_sync.py`).
 
-**Issues found during the hardening review and fixed** (1–3 during the T3 review, 4–6 after launch, in November 2026):
+**Issues found during the T3 hardening review and fixed:**
 
 1. **Non-UUID transaction IDs caused HTTP 500** on six webview endpoints (`/sep24/transaction/poll/`,
    `/sep24/onboarding/`, `/sep24/onboarding/switch/`, `/sep24/kyc/start/`, `/sep24/kyc/poll/`,
@@ -460,93 +540,20 @@ ingest of on-chain events (`reconciliation/tests/test_sync.py`).
 | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Home domain          | `anchor.versotek.io` — [`stellar.toml`](https://anchor.versotek.io/.well-known/stellar.toml) with `NETWORK_PASSPHRASE = "Public Global Stellar Network ; September 2015"`                                                           |
 | Asset                | USDC (Circle) `GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN`, `status = "live"`                                                                                                                                         |
-| Hot wallet (Turnkey) | [`GCYWYXFOWGOXOLUI6ZXBSMMRRK4KJUUVHBBSPMM6XAEOAX2YU5KZNJMM`](https://stellar.expert/explorer/public/account/GCYWYXFOWGOXOLUI6ZXBSMMRRK4KJUUVHBBSPMM6XAEOAX2YU5KZNJMM) — separate service user and policy from testnet               |
+| Hot wallet (Turnkey) | [`GCYWYXFOWGOXOLUI6ZXBSMMRRK4KJUUVHBBSPMM6XAEOAX2YU5KZNJMM`](https://stellar.expert/explorer/public/account/GCYWYXFOWGOXOLUI6ZXBSMMRRK4KJUUVHBBSPMM6XAEOAX2YU5KZNJMM) — own Turnkey service user and policy                           |
 | USDC trustline       | Signed by Turnkey: [`8d7e05e2…`](https://stellar.expert/explorer/public/tx/8d7e05e29ae29be7f987b7870e9fc909815a8cc0a8fe869e53b69681c9af1643)                                                                                        |
-| SEP-10 signing key   | Published as `SIGNING_KEY` in the mainnet `stellar.toml`; separate from testnet and **holds no funds** (it only signs SEP-10 challenges)                                                                                            |
-| Database             | New PostgreSQL for mainnet, no testnet data carried over                                                                                                                                                                            |
+| SEP-10 signing key   | Published as `SIGNING_KEY` in the mainnet `stellar.toml`; **holds no funds** (it only signs SEP-10 challenges)                                                                                            |
+| Database             | Dedicated PostgreSQL database for mainnet                                                                                                                                                                            |
 | D3 reconciliation    | Running on mainnet (Stellar RPC); balances match (delta 0); every discrepancy (e.g. treasury top-ups, a client payment sent without memo) resolved by an operator with a written note; 4 CloudWatch alarms on `Environment=mainnet` |
 | Settlement account   | CCI/CCE at VERSO's operating bank (separate PEN and USD accounts), shown to the client in the SEP-24 deposit instructions                                                                                                           |
 
-**SDF anchor test suite** (`@stellar/anchor-tests`) against `anchor.versotek.io` on mainnet: **SEP-1 5/5** and **SEP-10 14/17**. The 3 SEP-10 tests not passing on mainnet are the _Account Signer Support_ group: they create and configure funded test accounts, which the suite can only do on testnet. The same 3 tests pass against the testnet deployment.
+**SDF anchor test suite** (`@stellar/anchor-tests`) against `anchor.versotek.io` on mainnet: **SEP-1 5/5** and **SEP-10 14/17**. The 3 SEP-10 tests not run on mainnet are the _Account Signer Support_ group: they create and fund their own test accounts with extra signers, which the suite does not do on mainnet.
 
-**Deployment policy.** Testnet and mainnet are two Railway environments of the same repository; they differ only in environment variables and database. Testnet deploys automatically from `main`; mainnet auto-deploy is **off** and each release is deployed manually after it has been validated on testnet.
-
-### Post-launch improvements (November 2026)
-
-Changes made after the 30 operations of Deliverable 2, from what operating the anchor with real clients showed.
-They do not change the SEP interfaces; all of them are covered by tests in CI.
-
-#### Operator workflow: reject, hold, refund
-
-Polaris has no "rejected" or "on hold" status, and operations needed both. Each SEP-24 deposit and withdrawal in
-the admin now shows a **stage** derived from the Polaris status and VERSO's metadata (`operation_status.py`) and
-only the **actions allowed in that stage** (`operations.py`). Each action opens a confirmation page; nothing is
-applied from the list, and operations can no longer be deleted from the admin.
-
-| Stage (admin label)                                   | Deposit actions                       | Withdrawal actions               |
-| ----------------------------------------------------- | ------------------------------------- | -------------------------------- |
-| Initiated (_Iniciada_)                                | Confirm and send · Reject · Hold      | Reject · Hold                    |
-| Payment received, payout pending (_falta transferir_) | —                                     | Mark paid · Reject · Hold        |
-| Held (_Retenida_)                                     | Confirm and send · Reject             | Mark paid · Reject               |
-| Error                                                 | Reject                                | Reject                           |
-| Rejected, refund pending (_por devolver_)             | Register refund                       | Register refund                  |
-| Received · Sending (deposits only)                    | — (the deposit worker pays the USDC)  | —                                |
-| Completed · Rejected · Refunded                       | — (closed)                            | — (closed)                       |
-
-- **Confirm and send** (fiat received) and **Mark paid** (fiat sent) replace the former bulk actions _Mark fiat
-  received_ / _Mark fiat sent_, with the same protections: confirmation requires the client's declared transfer and
-  the deposit waiting for it; a withdrawal cannot be paid until its USDC was detected on-chain.
-- **Reject** closes the operation with a reason (client withdrew, different amount, third-party account, compliance
-  review, other) and an internal note. The Polaris status becomes `error` and the wallet is notified. A deposit
-  cannot be rejected once its USDC left; a withdrawal cannot be rejected once it was paid. The anchor records
-  whether the client's funds had already arrived (for withdrawals, from the on-chain payment); if so, the operation
-  stays _rejected, refund pending_ until a refund is registered.
-- **Hold** pauses an operation for review with a mandatory note. The Polaris status does not change, but the deposit
-  worker skips held deposits, so no USDC leaves (`rails.py`). Only one active hold per operation (database
-  constraint); confirming, paying or rejecting releases it.
-- **Register refund** records a refund made outside the anchor (amount and reference; for USDC refunds the
-  reference must be the 64-character Stellar transaction hash). It moves no money.
-- Every action re-reads the operation under a row lock, so two operators cannot act on the same stage twice. The
-  client never sees the reason of a rejection or a hold (issue 6 above).
-
-Tests: `test_operations.py`, `test_operation_status.py`. Procedures: [runbook](docs/RUNBOOK.md).
-
-#### History sync with VERSO
-
-A new service, **SYNC** (`sync_history_to_verso --loop`, `history_sync.py`), sends every SEP-24 operation to the
-client's history in VERSO, so a client sees anchor operations next to their other VERSO operations. Every ~15 s it
-builds the current state of each operation that has an amount (kind, status, wallet, fiat currency and amount, USDC
-amount, rate, dates, Stellar transaction hash and, for withdrawals, the declared source of funds), and sends it only
-if it changed since the last accepted send (SHA-256 fingerprint). VERSO's endpoint is idempotent.
-
-- It sweeps the tables instead of using signals because Polaris sometimes updates statuses with `QuerySet.update()`,
-  which fires no signals. It only reads Polaris and VERSO metadata and writes only its own control table
-  (`VersoHistorySync`), so it cannot affect deposits, withdrawals or reconciliation.
-- Temporary errors (VERSO unavailable, timeout, 5xx) are retried with back-off (30 s up to 15 min); a wallet not
-  linked to a VERSO user, or data rejected by VERSO, is retried hourly and shown in the admin, with a _retry now_
-  action. Redirects are not followed (a redirect means a misconfigured URL and would turn the POST into a GET).
-- `--dry-run` prints what would be sent without sending or saving anything. The service must run with one replica.
-
-Tests: `test_history_sync.py`, `test_core_client.py`.
-
-#### Webview
-
-- **No repeated login for linked wallets.** When the SEP-10 wallet is already linked to an active, KYC-approved
-  VERSO account, the webview skips the VERSO login: the SEP-10 signature proves control of the wallet, and the link
-  was created with a password login. Wallets that are not linked yet still log in, which is where the link is made.
-- **One open operation per wallet.** A wallet with an operation that reached the amount step and is not finished
-  is asked to finish it before starting another. Abandoned webviews (no amount entered) never block.
-- **Sign and pay from the popup.** When the webview was opened from versotek.io, the withdrawal instructions show a
-  _Sign and send payment_ button that asks the opener page, which holds the wallet connection, to sign the USDC
-  payment with the right memo and amount. External wallets do not answer that check, so they keep paying on their
-  own and the button stays hidden (`withdraw_wallet_pay.js`). A _Make another operation_ button asks the opener to
-  start a new SEP-24 transaction once the current one finishes (`new_operation.js`).
-- **`stellar.toml` endpoint URLs** (`WEB_AUTH_ENDPOINT`, `TRANSFER_SERVER_SEP0024`, `ANCHOR_QUOTE_SERVER`) are built
-  by `sep1.py` instead of Polaris, which joins them with `os.path.join` and writes a backslash on Windows.
+**Deployment policy.** Mainnet auto-deploy is **off**: each release is deployed manually after the test suite passes in CI, followed by a smoke test on the live anchor ([runbook](docs/RUNBOOK.md#10-releases)).
 
 ## Production environments
 
-| Check                   | Mainnet                                                    | Testnet                                                           |
+| Check                   | Mainnet                                                    | Testnet (T1/T2)                                                   |
 | ----------------------- | ---------------------------------------------------------- | ----------------------------------------------------------------- |
 | Health / landing        | https://anchor.versotek.io/ (HTML; JSON at `?format=json`) | https://verso-sdf-testnet.up.railway.app/                         |
 | stellar.toml (SEP-1)    | https://anchor.versotek.io/.well-known/stellar.toml        | https://verso-sdf-testnet.up.railway.app/.well-known/stellar.toml |
@@ -626,7 +633,7 @@ The correct place in the protocol for the KYC check and the DIDIT onboarding red
 - [`docs/CALLBACKS.md`](docs/CALLBACKS.md) — callback reference: every Polaris integration hook and external interface.
 - [`docs/RUNBOOK.md`](docs/RUNBOOK.md) — operator runbook: fiat settlement, exceptions, reconciliation, incidents.
 - [`docs/T2_EVIDENCE.md`](docs/T2_EVIDENCE.md) — Tranche 2 evidence: transactions, quotes, reconciliation report and alerts.
-- [`docs/T3_EVIDENCE.md`](docs/T3_EVIDENCE.md) — Tranche 3 evidence (mainnet): the 30 operations with their Stellar transactions, settlement times, banks, security review and deviations.
+- [`docs/T3_EVIDENCE.md`](docs/T3_EVIDENCE.md) — Tranche 3 evidence (mainnet): all 33 operations with their Stellar transactions, settlement times, banks, security review and deviations.
 
 ## License
 

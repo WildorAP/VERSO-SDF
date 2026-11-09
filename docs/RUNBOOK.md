@@ -191,8 +191,8 @@ whether a value is set.
 
 ## 10. Releases
 
-1. Merge to `main` → the **testnet** environment deploys automatically and CI runs the test suite.
-2. Test the change on testnet (deposit and withdrawal through a wallet).
+1. Test the change locally (deposit and withdrawal through a wallet).
+2. Merge to `main` → CI runs the test suite against PostgreSQL + Redis; it must pass.
 3. Deploy **mainnet manually** (mainnet auto-deploy is off).
 4. Smoke test on mainnet: `stellar.toml`, SEP-10 challenge, `/sep24/info`, `/sep38/info`, one webview opening.
 5. Watch reconciliation and the workers for the next 15 minutes.

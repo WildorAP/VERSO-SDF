@@ -17,14 +17,13 @@ system (**CCI/CCE**). The anchor exposes the standard Stellar interfaces so any 
 | SEP-38 | Quotes (indicative and firm) | `https://anchor.versotek.io/sep38/` |
 
 The anchor is built on **django-polaris** (SDF's Python reference implementation) inside VERSO's Django backend.
-Testnet runs the same code in a separate environment (`https://verso-sdf-testnet.up.railway.app`).
 
 ## Component diagram
 
 ```mermaid
 flowchart LR
     subgraph Client["Client side"]
-        W["Stellar wallet<br/>(Freighter, xBull, LOBSTR,<br/>versotek.io ANCHOR button)"]
+        W["Stellar wallet<br/>(Freighter, LOBSTR, xBull via<br/>versotek.io ANCHOR button,<br/>or any SEP-24 wallet)"]
         B["Client's Peruvian<br/>bank account"]
     end
 
@@ -79,7 +78,7 @@ flowchart LR
 | **Withdrawal worker** | Polaris `watch_transactions`: streams payments into the hot wallet and matches each one to its SEP-24 withdrawal by memo | Resumes from its stored cursor after a restart |
 | **Reconciliation worker** | Ingests every USDC movement of the hot wallet through Stellar RPC `getEvents`, matches it to its SEP-24 transaction and compares the on-chain balance with the internal ledger every ~60 s | Publishes metrics; alarms notify operations by email |
 | **History sync worker** | `sync_history_to_verso --loop`: every ~15 s sends each SEP-24 operation whose state changed to the client's history in VERSO Core | Read-only on Polaris data; writes only its own control table. One replica. A VERSO outage never blocks payouts |
-| **PostgreSQL** | Polaris transactions, VERSO deposit/withdrawal metadata, operator rejections and holds, history sync state, reconciliation ledger and runs | Mainnet and testnet use separate databases |
+| **PostgreSQL** | Polaris transactions, VERSO deposit/withdrawal metadata, operator rejections and holds, history sync state, reconciliation ledger and runs | Dedicated mainnet database |
 | **Redis** | Cache and webview sessions | — |
 | **VERSO Core** | VERSO's main platform: client accounts and linked wallets, KYC status, live exchange rates (`rate_venta` / `rate_compra`), client operation history | Called server-to-server with a shared secret; never exposed to wallets |
 | **DIDIT** | Identity verification (KYC) | Launched from the webview when the client has no approved KYC |
@@ -185,16 +184,16 @@ VERSO are retried hourly and shown in the admin. Details: [implementation guide,
 
 ## Environments and deployment
 
-| | Mainnet | Testnet |
-| --- | --- | --- |
-| Home domain | `anchor.versotek.io` | `verso-sdf-testnet.up.railway.app` |
-| Network | Public Global Stellar Network | Test SDF Network |
-| USDC issuer | Circle `GA5Z…KZVN` | Circle testnet `GBBD…FLA5` |
-| Database | Own PostgreSQL (no testnet data) | Own PostgreSQL |
-| Deploy | **Manual**, only after the release was validated on testnet | Automatic from `main` |
+| | Mainnet |
+| --- | --- |
+| Home domain | `anchor.versotek.io` |
+| Network | Public Global Stellar Network |
+| USDC issuer | Circle `GA5Z…KZVN` |
+| Database | Dedicated PostgreSQL |
+| Deploy | **Manual**, after the test suite passes in CI |
 
-Both environments run the same repository and differ only in configuration. Test shortcuts (mock KYC, automatic fiat
-confirmation) are disabled in both. Every push runs the test suite on GitHub Actions against PostgreSQL + Redis.
+Test shortcuts (mock KYC, automatic fiat confirmation) are disabled. Every push runs the test suite on GitHub Actions
+against PostgreSQL + Redis.
 
 ## Libraries and network access
 
