@@ -77,10 +77,9 @@ anchor_asset = "PEN"      # a second entry has anchor_asset = "USD"
 
 ### Deviations
 
-- **AWS KMS → Turnkey.** AWS KMS cannot sign Ed25519, the signature scheme of Stellar. The hot wallet key was
-  generated inside Turnkey (hardware-isolated enclaves) and never exists on VERSO servers; payouts are signed through
-  Polaris' official `CustodyIntegration` ([`custody.py`](../backend/verso_integrations/custody.py)). Details: README →
-  _Architecture note_, point 2.
+- **AWS KMS → Turnkey.** AWS KMS cannot sign Ed25519, the signature scheme of Stellar. The hot wallet key lives in
+  Turnkey and never exists on VERSO servers; how signing is verified is in Deliverable 4, and the full rationale in
+  the README, _Architecture note_, point 2.
 - **Cold wallet dual approval → separate treasury wallet.** It appears in the deliverable description, not in its
   measurement criteria. The hot wallet only holds the operating float; the bulk of funds is kept in a separate VERSO
   treasury wallet that is not connected to the anchor or its servers and funds the hot wallet when needed (the
@@ -145,15 +144,16 @@ confirmed by the operator (off-ramp).
 
 **Supporting documents.** Each operation is invoiced to the client with an electronic receipt (_boleta de venta
 electrónica_) registered with SUNAT, Peru's tax authority. The receipt records the fiat amount, the USDC amount, the
-exchange rate, **commission 0** and the client's bank. 26 of the 33 operations have one so far:
+exchange rate, **commission 0** and the client's bank. all 30 client operations have one. The other 3 (D1, W1 and D35) were made from VERSO team accounts (clients A
+and K below), so there is no client to invoice:
 
 | # | Admin ID | Fiat | Client bank | SUNAT receipt | Issued |
 | -: | -------- | ---: | ----------- | ------------- | ------ |
 | 1 | D1 | 2.00 USD | — | — | — |
-| 2 | D2 | 10.00 PEN | — | — | — |
+| 2 | D2 | 10.00 PEN | Alfin Banco | EB01-1764 | 2026-10-26 |
 | 3 | D4 | 90.00 PEN | Alfin Banco | EB01-1788 | 2026-10-26 |
 | 4 | D5 | 20.00 PEN | Alfin Banco | EB01-1789 | 2026-10-26 |
-| 5 | D6 | 80.00 PEN | — | — | — |
+| 5 | D6 | 80.00 PEN | Alfin Banco | EB01-1790 | 2026-10-26 |
 | 6 | D7 | 50.00 PEN | Alfin Banco | EB01-1791 | 2026-10-26 |
 | 7 | D8 | 15.00 PEN | Alfin Banco | EB01-1787 | 2026-10-26 |
 | 8 | D9 | 50.00 PEN | Alfin Banco | EB01-1786 | 2026-10-26 |
@@ -179,13 +179,15 @@ exchange rate, **commission 0** and the client's bank. 26 of the 33 operations h
 | 28 | D31 | 990.00 USD | BCP | EB01-1779 | 2026-10-26 |
 | 29 | W2 | 10.06 PEN | Alfin Banco | EB01-1780 | 2026-10-27 |
 | 30 | W3 | 10.06 PEN | Alfin Banco | EB01-1781 | 2026-10-27 |
-| 31 | D32 | 500.00 USD | — | — | — |
-| 32 | D33 | 15.00 PEN | — | — | — |
+| 31 | D32 | 500.00 USD | Alfin Banco | EB01-1792 | 2026-10-31 |
+| 32 | D33 | 15.00 PEN | BCP | EB01-1793 | 2026-11-07 |
 | 33 | D35 | 10.00 PEN | — | — | — |
 
-Issuer: **VERSO TECHNOLOGY S.A.C., RUC 20609951088**. Any receipt can be checked in SUNAT's public service
-_Consulta de Validez del CPE_ (www.sunat.gob.pe) with the issuer RUC, the series and number, the issue date and the
-total. The PDFs identify the client by name and national ID, so they are not published here; VERSO can share them
+Issuer: **VERSO TECHNOLOGY S.A.C., RUC 20609951088**. Any receipt can be checked, without an account, in SUNAT's
+public service _Consulta de Validez del CPE_:
+[e-consulta.sunat.gob.pe/ol-ti-itconsvalicpe/ConsValiCpe.htm](https://e-consulta.sunat.gob.pe/ol-ti-itconsvalicpe/ConsValiCpe.htm),
+with the issuer RUC, the document type (_boleta de venta electrónica_), the series and number (e.g. `EB01` / `1765`),
+the issue date and the total. The PDFs identify the client by name and national ID, so they are not published here; VERSO can share them
 with SDF reviewers on request.
 
 Off-ramp operations and their SEP-24 transaction (the hash memo is the transaction ID, zero-padded to 32 bytes):
@@ -219,8 +221,10 @@ measured from the creation of the order, which can only make them look slower.
 D20, D27 and D28 within the first 30; D34 on 2026-11-07). None of them released USDC: there is no payout for them
 on-chain, and the reconciliation would flag any. They are not counted as operations.
 
-Client A is the account VERSO's team used for the first end-to-end checks on mainnet (operations 1 and 25); it went
-through the same flow as every other client (SEP-10, VERSO account, KYC, real bank transfer or real USDC payment).
+Clients A and K are accounts of VERSO's team (operations 1, 25 and 33): A ran the first end-to-end checks on
+mainnet and K a later check. They went through the same flow as every other client (SEP-10, VERSO account, KYC, real
+bank transfer or real USDC payment). Without them, the first 30 operations still include 28 made by 8 external
+clients.
 
 ### Settlement time
 
@@ -271,12 +275,11 @@ Every fiat movement is approved by a person, as required by VERSO's obligations 
 lets the operator hold an operation for review, reject it with a reason and register refunds
 ([runbook](RUNBOOK.md#5-rejections-holds-and-refunds)).
 
-**Deviation — bank receipt verified manually.** The description mentions that a confirmed bank receipt triggers an
-instant alert. It is not a measurement criterion. VERSO verifies every fiat receipt **manually in its bank
-account**: when the client declares the transfer and uploads the receipt, the deposit appears in the admin queue,
-the operator checks that the credit arrived in VERSO's bank account (amount, currency account, sender) and only
-then confirms it. The bank is the source of truth for every fiat movement, and this manual check is how the
-~5-minute average was reached.
+**Deviation — bank receipt verified manually.** The description mentions an instant alert when a bank receipt is
+confirmed; it is not a measurement criterion. Instead, the declared transfer and its receipt put the deposit in the
+admin queue, and the operator checks the credit (amount, currency account, sender) directly in VERSO's bank account
+before approving it, as in the table above. The bank remains the source of truth for every fiat movement, and this
+is how the 5-minute average was reached.
 
 ---
 

@@ -190,41 +190,27 @@ popup to stay connected to its opener:
 - `sep24/wallet_callbacks.py` keeps the wallet's `callback` / `on_change_callback` parameters through every webview
   step, and `more_info` always uses `callback=postMessage` for withdrawals, so the wallet learns the memo and amount it
   must send.
-- **Callback values are filtered.** Polaris writes `callback` unescaped inside a `<script>` block of `more_info`, so
-  only `postMessage`, Polaris' `success` marker or an `https` URL (also `http` in local mode) made of a strict set of
-  characters is kept; any other value is removed from the request before Polaris renders the page
-  (`drop_unsafe_wallet_callbacks`). The webview pages, reachable with only a transaction ID, never store or replace
-  a callback URL on the transaction: they can only mark a transaction without callback as `postMessage`.
-- **Sign and pay from the opener.** On the withdrawal instructions, `withdraw_wallet_pay.js` asks the opener whether
-  it can pay (`verso:withdraw_pay_check`). versotek.io answers `verso:withdraw_pay_ready`, the webview shows *Firmar y
-  enviar pago*, and the click sends `verso:pay_withdraw`; the opener signs the payment with the connected wallet and
-  replies `verso:withdraw_pay_result`. Messages are only accepted from the opener and for the same transaction ID.
-  Wallets that do not answer keep paying on their own, and the button stays hidden.
-- **Another operation.** When the transaction finishes, *Hacer otra operación* (`new_operation.js`) posts
-  `verso:new_operation` to the opener, which holds the SEP-10 token needed to start a new SEP-24 transaction.
+- **Callback values are filtered** before Polaris renders `more_info`, and the webview pages never store or
+  replace a callback URL on the transaction (rules in [Callback reference → Wallet-facing callbacks](CALLBACKS.md#wallet-facing-callbacks)).
+- **Sign and pay from the opener, and start another operation.** When the popup was opened from versotek.io, the
+  withdrawal instructions show *Firmar y enviar pago*, which asks the opener (it holds the wallet connection) to sign
+  the USDC payment, and finished operations show *Hacer otra operación*. Both use `postMessage`; the message
+  protocol is in [Callback reference → Messages between the webview and versotek.io](CALLBACKS.md#messages-between-the-webview-and-versotekio).
+  Wallets that do not answer keep paying on their own.
 
 ### 4.7 Operator actions and what the client sees
 
 Polaris has no "rejected" or "held" status. VERSO adds them on top of Polaris without changing its state machine:
+`operation_status.py` derives a read-only **stage** for each operation from the Polaris status, the VERSO metadata
+and two models, `OperationRejection` and `OperationHold`; `operations.py` defines the actions allowed in each stage
+(**Confirm and send**, **Mark paid**, **Reject**, **Hold**, **Register refund**) and applies them under a row lock.
+A held deposit is never paid, and a rejection sets the Polaris status to `error` and notifies the wallet.
 
-- `operation_status.py` derives a read-only **stage** for each operation (initiated, received, sending, completed,
-  error, held, rejected, rejected-refund-pending, refunded) from the Polaris status, the VERSO metadata and two
-  models: `OperationRejection` (one per transaction) and `OperationHold` (several, at most one active, enforced by a
-  database constraint). The same rule is written as a function (admin column) and as a query filter (admin list
-  filter); tests keep both in sync.
-- `operations.py` defines the actions allowed per stage — **Confirm and send**, **Mark paid**, **Reject**, **Hold**,
-  **Register refund** — and applies each one inside a database transaction, after re-reading the operation under a
-  row lock and checking again that the action is still allowed.
-- **Reject** sets the Polaris status to `error`, with `status_message = "Rejected by operator: <reason>"`, and calls
-  the wallet callback. It is refused for a deposit whose USDC already left and for a withdrawal already paid.
-  `funds_received` is taken from the chain for withdrawals and from the operator for unconfirmed deposits (the anchor
-  cannot see the bank). With funds received, the operation waits for **Register refund**, which only records the
-  amount and reference (a Stellar hash for USDC refunds) and sets Polaris' `refunded` flag.
-- **Hold** leaves the Polaris status unchanged; `VersoRailsIntegration.poll_pending_deposits` skips held deposits, so
-  no USDC leaves while the hold is active.
-- The client only sees fixed texts (`customer_message`): one rejection text for every reason, *"Tu operación está
-  en revisión"* during a hold, and a generic error text. Polaris' `message` (written for operators) is never shown in
-  the webview or in the poll endpoint.
+The client only sees fixed texts (`customer_message`): one rejection text for every reason, *"Tu operación está en
+revisión"* during a hold, and a generic error text; Polaris' `message`, written for operators, is never shown.
+
+Each action, its preconditions and its effect: [Callback reference → Operator actions](CALLBACKS.md#operator-actions-admin).
+When to use each one: [runbook, section 5](RUNBOOK.md#5-rejections-holds-and-refunds).
 
 ## 5. SEP-38 — Quotes
 
@@ -282,22 +268,15 @@ ledger with the on-chain balance every ~60 s. Discrepancy types: `balance_mismat
 
 Not a SEP either: it lets a client see their anchor operations in their VERSO history. `history_sync.sync_once`,
 run by `python manage.py sync_history_to_verso --loop` (its own service, one replica), sweeps the SEP-24
-transactions every `VERSO_HISTORY_SYNC_INTERVAL_SECONDS` (default 15):
-
-1. It takes every SEP-24 transaction with VERSO metadata (it reached the amount step) that is not `incomplete`.
-2. It builds the operation's current state — `anchor_transaction_id`, `kind`, `status`, `stellar_account`,
-   `fiat_currency`, `amount_fiat`, `amount_usdc`, `rate`, `started_at`, `completed_at`, `stellar_transaction_id` and,
-   for withdrawals, the declared source of funds — and its SHA-256 fingerprint.
-3. If the fingerprint equals the last one VERSO accepted, nothing is sent. Otherwise it is posted to VERSO Core,
-   whose endpoint is idempotent per `anchor_transaction_id`.
-
-The result is stored in `VersoHistorySync` (one row per transaction): *synced*, *retrying* (temporary error, back-off
-30 s → 15 min), *not linked* (the wallet belongs to no VERSO user) or *rejected* (VERSO refused the data); the last two
-are retried hourly, or at once if the operation changes. A sweep never stops on a VERSO error.
+transactions every `VERSO_HISTORY_SYNC_INTERVAL_SECONDS` (default 15) and sends to VERSO Core only the operations
+whose state changed since the last accepted send (SHA-256 fingerprint).
 
 A sweep is used instead of Django signals because Polaris sometimes changes statuses with `QuerySet.update()`, which
-fires no signals. The module only reads Polaris and VERSO tables and writes only `VersoHistorySync`, so a failure in
-VERSO can never affect payouts, withdrawals or reconciliation. `--dry-run` prints the payloads without sending.
+fires no signals. The module only reads Polaris and VERSO tables and writes only its own control table
+(`VersoHistorySync`), so a failure in VERSO can never affect payouts, withdrawals or reconciliation. `--dry-run`
+prints the payloads without sending.
+
+Payload, responses and retry policy: [Callback reference → Outbound: history sync](CALLBACKS.md#outbound-history-sync--history_syncsync_once).
 
 ## 9. Testing
 
